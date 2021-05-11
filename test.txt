@@ -1,6 +1,7 @@
 def N<=3;
-A{0};
-A;
+A{N+1} = a.nil + b.nil;
+A{N} = a + b;
+A{0} = skip ;
 *def b2=[true,false];
 *def k=[1,2];
-set L = { val, x, y};
+*set L = { val, x, y};
