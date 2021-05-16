@@ -42,11 +42,17 @@ languageDef =
           ":=",
           "<",
           ">",
-          "=",
+          "==",
+          "<=",
+          ">=",
+          "!=",
           "++",
           "and",
           "or",
-          "not"
+          "not",
+          "&&",
+          "||",
+          "!"
         ],
       Token.caseSensitive = True
     }

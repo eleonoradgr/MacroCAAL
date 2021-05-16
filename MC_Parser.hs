@@ -6,6 +6,7 @@ import Data.Maybe
 import MC_Lexer
 import System.Environment
 import Text.Parsec
+import Text.Parsec.Char
 import Text.Parsec.Expr
 import Text.Parsec.Language
 import Text.Parsec.String
@@ -24,6 +25,7 @@ data CmpOp
   | Let
   | Get
   | Eq
+  | Neq
   deriving (Show)
 
 data BBinOp
@@ -57,7 +59,7 @@ data Action
 data Command
   = Skip
   | VarAssign String Expr
-  | Concat Command Command
+  | Concat [Command]
   | If BExpr Proc Proc
   | While BExpr Proc
   deriving (Show)
@@ -135,7 +137,7 @@ sumcompose =
 
 composition =
   do
-    p <- choice [try prefixC, try prefixA] --, reProcess]
+    p <- actionPrefix --choice [try prefixC, try prefixA, reProcess]
     mc <- optionMaybe parcompose
     if isJust mc
       then return $ ParallelComp p (fromJust mc)
@@ -146,13 +148,18 @@ parcompose =
     reservedOp "|"
     composition
 
+actionPrefix =
+  try prefixC
+    <|> try prefixA
+    <|> try reProcess
+
 prefixC =
   do
-    c <- command
+    c <- sepEndBy1 command comma
     mp <- optionMaybe prefixcompose
     if isJust mp
-      then return $ PrefixP (CommandP c) (fromJust mp)
-      else return (CommandP c)
+      then return $ PrefixP (CommandP (Concat c)) (fromJust mp)
+      else return (CommandP (Concat c))
 
 prefixA =
   do
@@ -165,7 +172,7 @@ prefixA =
 prefixcompose =
   do
     reservedOp "."
-    process
+    actionPrefix
 
 action =
   try output
@@ -191,7 +198,6 @@ input =
 command =
   skip
     <|> ass
-    <|> seqc
     <|> ifc
     <|> whilec
 
@@ -206,17 +212,19 @@ ass =
     reservedOp ":="
     VarAssign var <$> aExpr
 
-seqc =
-  do
-    c1 <- command
-    comma
-    Concat c1 <$> command
+--seqc =
+--do
+--c1 <- command
+--comma
+--Concat c1 <$> command
 
 ifc =
   do
     reserved "if"
     b <- bExpr
+    reserved "then"
     t <- process
+    reserved "else"
     e <- process
     return $ If b t e
 
@@ -224,26 +232,57 @@ whilec =
   do
     reserved "while"
     b <- bExpr
+    reserved "do"
     c <- process
     return $ While b c
 
---reProcess =
---  parenProcess (reservedOp "\\") $
---    braces many idenitifier
---      <|> parenProcess (reservedOp "\\") procIdentifier
---      <|> parenProcess $brackets relabellings
---      <|> parenProcess
+reProcess =
+  try restriction1
+    <|> try restirction2
+    <|> try relabelling
+    <|> try parenProcess
 
---parenProcess =
---  parents process
---    <|> constantProcess
+restriction1 =
+  do
+    p <- parenProcess
+    reservedOp "\\"
+    i <- procIdentifier
+    return $ Restriction p [i]
 
---constantProcess = nilProcess <|> procName
+restirction2 =
+  do
+    p <- parenProcess
+    reservedOp "\\"
+    i <- brackets $ sepBy1 identifier comma
+    return $ Restriction p i
 
---nilProcess =
---  do
---    Integer(0)
---    return Nil
+relabelling =
+  do
+    p <- parenProcess
+    i <- braces $ many relabel
+    return $ Relabelling p i
+
+relabel =
+  do
+    l1 <- identifier
+    reservedOp "/"
+    l2 <- identifier
+    return (l1, l2)
+
+parenProcess =
+  parens process
+    <|> constantProcess
+
+constantProcess = nilProcess <|> procc
+
+procc =
+  do
+    ProcVar <$> procName
+
+nilProcess =
+  do
+    char '0'
+    return Nil
 
 setDeclaration =
   do
@@ -296,7 +335,8 @@ relation =
     <|> (reservedOp ">" >> return Gt)
     <|> (reservedOp "<=" >> return Let)
     <|> (reservedOp ">=" >> return Get)
-    <|> (reservedOp "=" >> return Eq)
+    <|> (reservedOp "==" >> return Eq)
+    <|> (reservedOp "!=" >> return Neq)
 
 aOperators =
   [ [Prefix (reservedOp "-" >> return Neg)],
@@ -308,8 +348,12 @@ aOperators =
 
 bOperators =
   [ [Prefix (reservedOp "not" >> return Not)],
-    [Infix (reservedOp "and" >> return (BBinOp And)) AssocLeft],
-    [Infix (reservedOp "or" >> return (BBinOp Or)) AssocLeft]
+    [ Infix (reservedOp "and" >> return (BBinOp And)) AssocLeft,
+      Infix (reservedOp "&&" >> return (BBinOp And)) AssocLeft
+    ],
+    [ Infix (reservedOp "or" >> return (BBinOp Or)) AssocLeft,
+      Infix (reservedOp "||" >> return (BBinOp Or)) AssocLeft
+    ]
   ]
 
 aTerm = parens aExpr <|> liftM Var identifier <|> liftM Var procIdentifier <|> liftM Int integer
