@@ -1,0 +1,66 @@
+P = a . a .(b . P + c . P) ;
+Q = a . (a . b . Q + a . c . Q) ;
+
+* Explore LTS of P and Q
+
+* Assign name to each state
+P0 = a . P1;
+P1 = a . P2;
+P2 = b . P0 + c . P0 ;
+
+Q0 = a . Q1;
+Q1 = a . Q2 + a . Q3 ;
+Q2 = b . Q0;
+Q3 = c . Q0;
+
+* Play bisimulation game
+
+* Verify: P0 strong trace equivalent to Q0
+* Verify: P0 not strong bisimilar to Q0
+*         generate distinguishing formula
+
+R = P0 + Q0 ;
+
+* Verify: P0 strong trace equivalent to R
+* Verify: P0 not strong bisimilar to R
+* Verify: Q0 not strong bisimilar to R
+* Verify: P0 strong similar R
+* Verify: R  strong similar P0
+* Verify: P0 strong similar equivalence R
+
+******************************************
+
+* Buffer with capacity 1
+B10 = in . B11 ;
+B11 = 'out . B10 ;
+
+* Parallel buffer with capacity 2
+PB20 = B10 | B10 ;
+
+* Sequential buffer with capacity 2
+SB20 = ( B10[c/in] | B10[c/out] ) \ { c } ;
+
+* Explore strong / weak LTS for PB20 and SB20
+* Show how to collapse states
+
+* Verify PB20 !~ SB20
+* Generate distinguishing formula
+* Verify PB20 ~~ SB20
+* Play weak bisimulation game: PB20 , SB20
+
+* PB40 = PB20 | PB20 ;
+* SB40 = ( SB20[c/in] | SB20[c/out] ) \ { c } ;
+
+* Explore strong / weak LTS for PB40 and SB40
+* Verify SB40 ~~ PB40
+
+* PB60 = PB40 | PB20 ;
+* SB60 = ( SB40[c/in] | SB20[c/out] ) \ { c } ;
+
+* Explore strong / weak LTS for PB60 and SB60
+* Verify SB60 ~~ PB60
+
+* DO NOT TRY TO EXPLORE LTS: TOO LARGE!
+* PB80 = PB40 | PB40 ;
+* SB80 = ( SB40[c/in] | SB40[c/out] ) \ { c } ;
+* Verify SB80 ~~ PB80

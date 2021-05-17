@@ -1,0 +1,185 @@
+* Peterson mutual exclusion algorithm
+*
+* Two processes P1, P2
+* Two boolean variables b1, b2 (both initially false)
+*     when Pi wants to enter the critical section, then it sets bi to true
+* An integer variable k, taking values in {1,2} (initial value is arbitrary)
+*     the process Pk has priority over the other process
+*
+* Process P1 in pseudocode
+* while (true) {
+*     ... // non critical section
+*     b1 = true ;               // P1 wants to enter the critical section
+*     k = 2 ;                   // P1 gives priority to the other process
+*     while (b2 && k==2) skip ; // P1 waits its turn
+*     ...                       // P1 enters the critical section
+*     b1 = false                // P1 leaves the critical section
+* }
+*
+* Process P2 is analogous to P1
+
+* boolean variable B1
+B1W = b1wf.B1f + b1wt.B1t ;
+B1f = 'b1rf.B1f + B1W;
+B1t = 'b1rt.B1t + B1W ;
+
+* boolean variable B2
+B2W = b2wf.B2f + b2wt.B2t ;
+B2f = 'b2rf.B2f + B2W ;
+B2t = 'b2rt.B2t + B2W ;
+
+* variable K, range {1,2}
+KW = kw1.K1 + kw2.K2 ;
+K1 = 'kr1.K1 + KW ;
+K2 = 'kr2.K2 + KW ;
+
+* P1 in CCS
+P1 = 'b1wt.'kw2.P1a ;
+P1a = b2rf.P1b + b2rt.(kr1.P1b + kr2.P1a) ;
+* No busy waiting
+* P1a = b2rf.P1b + kr1.P1b ;
+P1b = enter1.exit1.'b1wf.P1 ;
+* Note that it would be wrong let 
+* P1a = b2rf.P1b + b2rt.kr1.P1b + b2rt.kr2.P1a) ;
+
+* P2 in CCS
+P2 = 'b2wt.'kw1.P2a ;
+P2a = b1rf.P2b + b1rt.(kr2.P2b + kr1.P2a) ;
+* No busy waiting
+* P2a = b1rf.P2b + kr2.P2b ;
+P2b = enter2.exit2.'b2wf.P2 ;
+
+* System (Peterson)
+set L = { b1rf, b1rt, b1wf, b1wt, b2rf, b2rt, b2wf, b2wt, kr1, kr2, kw1, kw2 } ;
+SP = (B1f | B2f | KW | P1 | P2) \ L ;
+
+* Explore LTS of SP: 
+* strong successor + no bisimulation collapse
+* show adjustable depth
+* strong successor + strong bisimulation collapse
+* strong successor + weak bisimulation collapse: 16 states
+
+
+* Verify SP weak trace equivalent to W
+* (not strong/weak bisimilar)
+W = enter1.exit1.W + enter2.exit2.W ;
+
+* Verify SP using enter/exit instead of enter1/enter2/exit1/exit2 is weak bisimilar to S
+SP1 = SP[enter/enter1,enter/enter2,exit/exit1,exit/exit2] ;
+S = enter.exit.S ;
+
+* Mutex test
+MT = 'enter1.MT1 + 'enter2.MT2 ;
+MT1 = 'exit1.MT + 'enter2.'bad.0 ;
+MT2 = 'exit2.MT + 'enter1.'bad.0 ;
+
+* Monitored System (Peterson)
+set E = { enter1, enter2, exit1, exit2 } ;
+MP = (SP | MT) \ E ;
+
+* Explore LTS of MP
+* strong successor + no bisimulation collapse: many states, no bad transitions
+* strong successor + strong bisimulation collapse: 1 state, no bad transitions
+
+* Weak sanity check
+* Verify: SP does not satisfy formula
+* <<enter1>><<enter2>>tt or <<enter2>><<enter1>>tt ;
+*
+* Verify: Mutual exclusion property
+* MEX = [exit1]ff or [exit2]ff ;
+* MEX and [-](MEX and [-](MEX and [-]( ... )) )
+* X max= ([exit1]ff or [exit2]ff) and [-]X ;
+* SP |= X
+*
+* Y min= (<exit1>tt and <exit2>tt) or <->Y ;
+* SP |=/= Y ;
+*
+* Z min= (<enter1>tt and <enter2>tt) or <->Z ;
+* SP |=/= Z ;
+
+* there is the possibility of enabling enter1
+* V min= <enter1>tt or <->V ;
+* SP |= V ;
+*
+* here and in any next state there is the possibility of enabling enter1
+* U max= V and [-]U ;
+* SP |= U ;
+
+* deadlock freedom
+* D max= <->tt and [-]D;
+* SP |= D ;
+
+* adding req1,req2 and without busy waiting
+* P1 = 'b1wt.req1.'kw2.P1a ;
+* P2 = 'b2wt.req2.'kw1.P2a ;
+* P1a = b2rf.P1b + kr1.P1b ;
+* P2a = b1rf.P2b + kr2.P2b ;
+*
+* R min= <exit1>tt or [-]R;
+* Q max= [req1]R and [-]Q;
+* SP |= Q ;
+
+
+
+* Hyman's incorrect algorithm
+*
+* Two processes H1, H2
+* Two boolean variables b1, b2 (both initially false)
+*     when Hi wants to enter the critical section, then it sets bi to true
+* An integer variable k, taking values in {1,2}
+*     the process Hk has priority over the other process
+*
+* Process H1 in pseudocode
+* while (true) {
+*     ... // non critical section
+*     b1 = true ;               // H1 wants to enter the critical section
+*     while (k==2) {            // while H2 has priority
+*         while (b2) skip ;     // H1 waits 
+*         k = 1;                // H1 sets priority to itself
+*     }
+*     ...                       // H1 enters the critical section
+*     b1 = false                // H1 leaves the critical section
+* }
+*
+* Process H2 is analogous to H1
+
+* H1 in CCS
+H1 = 'b1wt.H1a ;
+H1a = kr2.H1b + kr1.H1d ;
+H1b = b2rt.H1b + b2rf.H1c ;
+* no busy waiting
+* H1b = b2rf.H1c ;
+H1c = 'kw1.H1a ;
+H1d = enter1.exit1.'b1wf.H1 ;
+
+* H2 in CCS
+H2 = 'b2wt.H2a ;
+H2a = kr1.H2b + kr2.H2d ;
+H2b = b1rt.H2b + b1rf.H2c ;
+* no busy waiting
+* H2b = b1rf.H2c ;
+H2c = 'kw2.H2a ;
+H2d = enter2.exit2.'b2wf.H2 ;
+
+* System (Hyman)
+SH = (B1f | B2f | K1 | H1 | H2) \ L ;
+
+* Explore LTS of SH: augment depth 
+* strong successor + no bisimulation collapse
+* strong successor + strong bisimulation collapse
+* strong successor + weak bisimulation collapse: 24 states
+* find a state with outgoing arrows exit1,exit2
+
+* Verify SH not weak trace equivalent to W
+
+* Monitored System (Hyman)
+MH = (SH | MT) \ E ;
+
+* Explore LTS of MH
+* strong successor + no bisimulation collapse: many states, bad transition already visible
+* strong successor + strong bisimulation collapse: 36 states, bad transition visible
+* strong successor + weak bisimulation collapse: 2 states, bad transition
+
+* Verify: Mutual exclusion property
+* X max= ([exit1]ff or [exit2]ff) and [-]X ;
+* SP |=/= X
