@@ -5,7 +5,6 @@ import Control.Applicative ((<*))
 import Control.Monad
 import Data.Maybe
 import MC_Lexer
-import System.Environment
 import Text.Parsec
 import Text.Parsec.Char
 import Text.Parsec.Expr
@@ -201,7 +200,8 @@ procc =
 
 nilProcess =
   do
-    char '0'
+    string "0"
+    optional whiteSpace
     return Nil
 
 setDeclaration =
@@ -294,9 +294,3 @@ parseSource code =
     Right r -> r
   where
     macroCaalParser = whiteSpace >> program
-
-main = do
-  [filename] <- getArgs
-  source <- readFile filename
-  let res = parseSource source
-  print res
