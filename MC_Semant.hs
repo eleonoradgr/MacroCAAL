@@ -290,11 +290,34 @@ testSeman rho def =
     Left e -> error $ show e
     Right r -> r
 
+translateProc rho p =
+  case p of
+    ActionP a -> ActionP a
+    CommandP Skip -> ActionP $ Coaction "done"
+    CommandP (VarAssign v e) ->
+      let e' = evalAExpr rho e []
+          action = v ++ "w" ++ show e'
+       in ActionP $ Action action
+    _ -> p
+
+translateStmt rho (ProcDef n p) =
+  let p' = translateProc rho p
+      rho' = rho {prog = prog rho ++ [ProcDef n p']}
+   in Right rho'
+translateStmt rho _ =
+  Left "Invalid definition"
+
+translate rho def =
+  case translateStmt rho def of
+    Left e -> error $ show e
+    Right r -> r
+
 main = do
   [filename] <- getArgs
   source <- readFile filename
   let res = parseSource source
   let rho = Rho {pid = [], setid = Map.empty, defIid = Map.empty, defBid = Map.empty, prog = []}
   let res1 = foldl testSeman rho res
+  let res2 = foldl translate (res1 {prog = []}) $ prog res1
   print res
   print res1
