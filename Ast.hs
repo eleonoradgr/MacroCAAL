@@ -20,11 +20,11 @@ data BBinOp
   | Or
   deriving (Show)
 
-data Expr
+data AExpr
   = Int Integer
   | Var String
-  | Neg Expr
-  | BinOp BinOp Expr Expr
+  | Neg AExpr
+  | BinOp BinOp AExpr AExpr
   deriving (Show)
 
 data BExpr
@@ -33,7 +33,7 @@ data BExpr
   | BVar String
   | Not BExpr
   | BBinOp BBinOp BExpr BExpr
-  | CmpOp CmpOp Expr Expr
+  | CmpOp CmpOp AExpr AExpr
   deriving (Show)
 
 data Action
@@ -45,14 +45,14 @@ data Action
 
 data Command
   = Skip
-  | VarAssign String Expr
+  | VarAssign String AExpr
   | Concat [Command]
   | If BExpr Proc Proc
   | While BExpr Proc
   deriving (Show)
 
 data ProcName
-  = Param String Expr
+  = Param String AExpr
   | Cst String
   deriving (Show)
 

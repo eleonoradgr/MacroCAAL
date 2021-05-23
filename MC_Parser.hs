@@ -226,7 +226,10 @@ rangeCmp =
     j <- optionMaybe integer
     if isJust j
       then return $ RangeCmp op i (fromJust j)
-      else return $ RangeCmp op 0 i
+      else
+        if i >= 0
+          then return $ RangeCmp op 0 i
+          else return $ RangeCmp op i 0
 
 range =
   do

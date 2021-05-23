@@ -75,6 +75,8 @@ reservedOp = Token.reservedOp lexer
 
 integer = Token.integer lexer
 
+natural = Token.natural lexer
+
 whiteSpace = Token.whiteSpace lexer
 
 parens = Token.parens lexer
