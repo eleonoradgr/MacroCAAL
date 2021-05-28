@@ -45,10 +45,11 @@ data Action
 
 data Command
   = Skip
-  | VarAssign String AExpr
-  | Concat [Command]
-  | If BExpr Proc Proc
-  | While BExpr Proc
+  | VarIAssign String AExpr
+  | VarBAssign String BExpr
+  | Concat Command Command
+  | If BExpr Command Command
+  | While BExpr Command
   deriving (Show)
 
 data ProcName

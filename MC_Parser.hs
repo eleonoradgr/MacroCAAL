@@ -74,11 +74,11 @@ actionPrefix =
 
 prefixC =
   do
-    c <- sepEndBy1 command comma
+    c <- command
     mp <- optionMaybe prefixcompose
     if isJust mp
-      then return $ PrefixP (CommandP (Concat c)) (fromJust mp)
-      else return (CommandP (Concat c))
+      then return $ PrefixP (CommandP c) (fromJust mp)
+      else return (CommandP c)
 
 prefixA =
   do
@@ -116,44 +116,68 @@ input =
 
 command =
   skip
-    <|> ass
+    <|> try ass
+    <|> boolass
     <|> ifc
     <|> whilec
 
 skip =
   do
     reserved "skip"
-    return Skip
+    optseq <- optionMaybe seqc
+    if isJust optseq
+      then return $ Concat Skip (fromJust optseq)
+      else return Skip
 
 ass =
   do
     var <- identifier
     reservedOp ":="
-    VarAssign var <$> aExpr
+    expr <- aExpr
+    optseq <- optionMaybe seqc
+    if isJust optseq
+      then return $ Concat (VarIAssign var expr) (fromJust optseq)
+      else return $ VarIAssign var expr
 
---seqc =
---do
---c1 <- command
---comma
---Concat c1 <$> command
+boolass =
+  do
+    var <- identifier
+    reservedOp ":="
+    expr <- bExpr
+    optseq <- optionMaybe seqc
+    if isJust optseq
+      then return $ Concat (VarBAssign var expr) (fromJust optseq)
+      else return $ VarBAssign var expr
 
 ifc =
   do
     reserved "if"
     b <- bExpr
     reserved "then"
-    t <- process
+    t <- command
     reserved "else"
-    e <- process
-    return $ If b t e
+    e <- command
+    optseq <- optionMaybe seqc
+    if isJust optseq
+      then return $ Concat (If b t e) (fromJust optseq)
+      else return $ If b t e
 
 whilec =
   do
     reserved "while"
     b <- bExpr
     reserved "do"
-    c <- process
-    return $ While b c
+    c <- braces command
+    optseq <- optionMaybe seqc
+    if isJust optseq
+      then return $ Concat (While b c) (fromJust optseq)
+      else return $ While b c
+
+seqc =
+  do
+    comma
+    c2 <- command
+    return c2
 
 reProcess =
   try restriction1

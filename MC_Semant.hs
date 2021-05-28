@@ -29,6 +29,7 @@ instance Show IType where
   show (IBool b) = show b
   show IUndef = "undef"
 
+{- Expression evaluation for process parameters -}
 evalAExpr rho (Int val) usedVar = (val, usedVar)
 evalAExpr rho (Neg expr) usedVar =
   let (e, uvar) = evalAExpr rho expr usedVar
@@ -37,14 +38,55 @@ evalAExpr rho (Var name) usedVar =
   case Map.lookup name $ defIid rho of
     Just x -> (head x, usedVar ++ [name])
     Nothing -> error $ "Variable " ++ name ++ " undefined"
-evalAExpr rho (BinOp op exp1 exp2) usedVar =
-  let (e1, n1) = evalAExpr rho exp1 usedVar
-   in let (e2, n2) = evalAExpr rho exp2 usedVar
+evalAExpr rho (BinOp op expr1 expr2) usedVar =
+  let (e1, n1) = evalAExpr rho expr1 usedVar
+   in let (e2, n2) = evalAExpr rho expr2 usedVar
        in let names = Set.toList . Set.fromList $ (n1 ++ n2)
            in case op of
                 Add -> (e1 + e2, names)
                 Sub -> (e1 - e2, names)
                 Mul -> (e1 * e2, names)
+
+evalCstAExpr (Int val) = val
+evalCstAExpr (Neg expr) = negate e
+  where
+    e = evalCstAExpr expr
+evalCstAExpr (BinOp op expr1 expr2) =
+  case op of
+    Add -> e1 + e2
+    Sub -> e1 - e2
+    Mul -> e1 * e2
+  where
+    e1 = evalCstAExpr expr1
+    e2 = evalCstAExpr expr2
+evalCstAExpr _ =
+  error "Non constant evaluation"
+
+evalCstBExpr T = True
+evalCstBExpr F = False
+evalCstBExpr (Not bexpr) =
+  not b
+  where
+    b = evalCstBExpr bexpr
+evalCstBExpr (BBinOp bop bexpr1 bexpr2) =
+  case bop of
+    And -> e1 && e2
+    Or -> e1 || e2
+  where
+    e1 = evalCstBExpr bexpr1
+    e2 = evalCstBExpr bexpr2
+
+evalCstBexpr (CmpOp cop expr1 expr2) =
+  case cop of
+    Lt -> e1 < e2
+    Gt -> e1 > e2
+    Let -> e1 <= e2
+    Get -> e1 >= e2
+    Eq -> e1 == e2
+    Neq -> e1 /= e2
+  where
+    e1 = evalCstAExpr expr1
+    e2 = evalCstAExpr expr2
 
 {-evalBExpr rho T usedVar = (True, usedVar)
 evalBExpr rho F usedVar = (False, usedVar)
@@ -80,9 +122,9 @@ addProcDef rho procName =
     then error $ "Process " ++ procName ++ " already defined defined"
     else rho {pid = pid rho ++ [procName]}
 
-parToCstCom rho c =
+{-parToCstCom rho c =
   case c of
-    Concat clist ->
+    Concat c1 c2 ->
       let clist' = map (parToCstCom rho) clist
        in Concat clist'
     If b p1 p2 ->
@@ -92,7 +134,7 @@ parToCstCom rho c =
     While b p ->
       let p' = parToCstProc rho p
        in While b p'
-    _ -> c
+    _ -> c -}
 
 parToCstProc rho p =
   case p of
@@ -100,7 +142,6 @@ parToCstProc rho p =
       let (ex, _) = evalAExpr rho expr []
           name' = name ++ show ex
        in ProcVar (Cst name')
-    CommandP c -> CommandP c
     PrefixP p1 p2 ->
       let p1' = parToCstProc rho p1
           p2' = parToCstProc rho p2
@@ -290,14 +331,80 @@ testSeman rho def =
     Left e -> error $ show e
     Right r -> r
 
+transGuardTrue rho T c = c
+transGuardTrue rho F c = ActionP $ Action "tau"
+transGuardTrue rho (BVar v) c =
+  let bRange = fromJust $ Map.lookup v $ defBid rho
+      action = v ++ "rtrue"
+   in if True `elem` bRange
+        then PrefixP (ActionP $ Coaction action) c
+        else ActionP $ Action "tau"
+transGuardTrue rho (Not b) c =
+  transGuardFalse rho b c
+transGuardTrue rho (BBinOp And b1 b2) c =
+  PrefixP
+    (transGuardTrue rho b1 (ActionP $ Action "tau"))
+    (transGuardTrue rho b2 c)
+transGuardTrue rho (BBinOp Or b1 b2) c =
+  ParallelComp (transGuardTrue rho b1 c) (transGuardTrue rho b2 c)
+
+transGuardFalse rho T c = ActionP $ Action "tau"
+transGuardFalse rho F c = c
+transGuardFalse rho (BVar v) c =
+  let bRange = fromJust $ Map.lookup v $ defBid rho
+      action = v ++ "rfalse"
+   in if False `elem` bRange
+        then PrefixP (ActionP $ Action action) c
+        else ActionP $ Action "tau"
+transGuardFalse rho (Not b) c =
+  transGuardTrue rho b c
+transGuardFalse rho (BBinOp And b1 b2) c =
+  ParallelComp (transGuardFalse rho b1 c) (transGuardFalse rho b2 c)
+transGuardFalse rho (BBinOp Or b1 b2) c =
+  PrefixP
+    (transGuardFalse rho b1 (ActionP $ Action "tau"))
+    (transGuardFalse rho b2 c)
+
+translateCom rho c =
+  case c of
+    Skip -> ActionP $ Coaction "done"
+    VarIAssign v e ->
+      let e' = evalCstAExpr e
+          eRange = fromJust $ Map.lookup v $ defIid rho
+          action = v ++ "w" ++ show e'
+       in if e' `elem` eRange
+            then ActionP $ Coaction action
+            else error $ "invalid value for " ++ v
+    VarBAssign v be ->
+      let be' = evalCstBExpr be
+          beRange = fromJust $ Map.lookup v $ defBid rho
+          action = v ++ "w" ++ show be'
+       in if be' `elem` beRange
+            then ActionP $ Coaction action
+            else error $ "invalid value for " ++ v
+    Concat c1 c2 ->
+      Restriction (ParallelComp p1 p2) ["seq"]
+      where
+        p1 = PrefixP (translateCom rho c1) (ActionP $ Action "seq")
+        p2 = PrefixP (ActionP $ Coaction "seq") (translateCom rho c2)
+    If b c1 c2 ->
+      NonDetChoise p1 p2
+      where
+        ct1 = translateCom rho c1
+        ct2 = translateCom rho c2
+        p1 = transGuardTrue rho b ct1
+        p2 = transGuardFalse rho b ct2
+
+{- Concat x:y:xs ->
+   let channel = "done" + show $ incrCounter 1 counter
+   let
+   in
+     counter = newCounter 0 -}
+
 translateProc rho p =
   case p of
     ActionP a -> ActionP a
-    CommandP Skip -> ActionP $ Coaction "done"
-    CommandP (VarAssign v e) ->
-      let e' = evalAExpr rho e []
-          action = v ++ "w" ++ show e'
-       in ActionP $ Action action
+    CommandP c -> translateCom rho c
     _ -> p
 
 translateStmt rho (ProcDef n p) =
