@@ -2,6 +2,9 @@ module MC_Semant where
 
 import Ast
 import Data.Char
+import Data.IORef
+import Data.List
+import qualified Data.List as List
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Maybe
@@ -18,6 +21,21 @@ data Rho = Rho
     prog :: [Stmt]
   }
   deriving (Show)
+
+newtype Counter = Counter {x :: IORef Int}
+
+makeCounter i = do
+  iref <- newIORef i
+  return (Counter iref)
+
+incCounter i (Counter c) = modifyIORef c (+ i)
+
+showCounter (Counter c) =
+  do
+    c' <- readIORef c
+    return $show c'
+
+counter = makeCounter 0
 
 data IType
   = IInt Integer
@@ -41,7 +59,7 @@ evalAExpr rho (Var name) usedVar =
 evalAExpr rho (BinOp op expr1 expr2) usedVar =
   let (e1, n1) = evalAExpr rho expr1 usedVar
    in let (e2, n2) = evalAExpr rho expr2 usedVar
-       in let names = Set.toList . Set.fromList $ (n1 ++ n2)
+       in let names = Set.toList . Set.fromList $ n1 ++ n2
            in case op of
                 Add -> (e1 + e2, names)
                 Sub -> (e1 - e2, names)
@@ -336,7 +354,7 @@ transGuardTrue rho F c = ActionP $ Action "tau"
 transGuardTrue rho (BVar v) c =
   let bRange = fromJust $ Map.lookup v $ defBid rho
       action = v ++ "rtrue"
-   in if True `elem` bRange
+   in if or bRange
         then PrefixP (ActionP $ Coaction action) c
         else ActionP $ Action "tau"
 transGuardTrue rho (Not b) c =
@@ -365,51 +383,163 @@ transGuardFalse rho (BBinOp Or b1 b2) c =
     (transGuardFalse rho b1 (ActionP $ Action "tau"))
     (transGuardFalse rho b2 c)
 
-translateCom rho c =
+assAexpreval rho v e =
+  let e' = evalCstAExpr e
+      eRange = fromJust $ Map.lookup v $ defIid rho
+      action = v ++ "w" ++ show e'
+   in if e' `elem` eRange
+        then action
+        else error $ "invalid value for " ++ v
+
+assBexpreval rho v be =
+  let be' = evalCstBExpr be
+      beRange = fromJust $ Map.lookup v $ defBid rho
+      action = v ++ "w" ++ show be'
+   in if be' `elem` beRange
+        then action
+        else error $ "invalid value for " ++ v
+
+doneCommand = PrefixP (ActionP $ Coaction "done") Nil
+
+tau = ActionP $ Action "tau"
+
+act name = ActionP $ Action name
+
+cact name = ActionP $ Coaction name
+
+newname i = "PROG" ++ show i
+
+genNonDetChoice proclist =
+  case proclist of
+    [x] -> x
+    [x, y] -> NonDetChoise x y
+    (x : xs) -> NonDetChoise x $ genNonDetChoice xs
+
+guardgen rho T trueListAct falseListAct trueAct falseAct isSecond
+  | isSecond = (trueListAct ++ [PrefixP tau trueAct], falseListAct)
+  | length trueListAct == 1 = ([PrefixP tau (head trueListAct)], falseListAct)
+  | otherwise =
+    let ndc = genNonDetChoice trueListAct
+     in ([PrefixP tau ndc], falseListAct)
+guardgen rho F trueListAct falseListAct trueAct falseAct isSecond
+  | isSecond = (trueListAct, falseListAct ++ [PrefixP tau falseAct])
+  | length falseListAct == 1 = (trueListAct, [PrefixP tau (head falseListAct)])
+  | otherwise =
+    let ndc = genNonDetChoice falseListAct
+     in (trueListAct, [PrefixP tau ndc])
+guardgen rho (BVar v) trueListAct falseListAct trueAct falseAct isSecond =
+  let bRange = fromJust $ Map.lookup v $ defBid rho
+      tAct =
+        [ActionP $ Action $ v ++ "rtrue" | True `elem` bRange]
+      fAct =
+        [ActionP $ Action $ v ++ "rfalse" | False `elem` bRange]
+   in if isSecond
+        then (map (`PrefixP` trueAct) tAct, map (`PrefixP` falseAct) fAct)
+        else (tAct, fAct)
+guardgen rho (CmpOp Eq (Var v) e) trueListAct falseListAct trueAct falseAct isSecond =
+  let bRange = fromJust $ Map.lookup v $ defIid rho
+      e' = evalCstAExpr e
+      listT = [ActionP $ Action $ v ++ "r" ++ show e']
+      falseass = List.delete e' bRange
+      listF = map (\x -> ActionP $ Action $ v ++ "r" ++ show x) falseass
+   in if e' `elem` bRange
+        then
+          if isSecond
+            then
+              let listT' = [PrefixP (head listT) trueAct]
+                  listF' = map (`PrefixP` falseAct) listF
+               in (listT', listF')
+            else (listT, listF)
+        else ([], listF)
+guardgen rho (Not b) trueListAct falseListAct trueAct falseAct isSecond =
+  let (listT, listF) = guardgen rho b trueListAct falseListAct falseAct trueAct isSecond
+   in (listF, listT)
+guardgen rho (BBinOp And b1 b2) trueListAct falseListAct trueAct falseAct isSecond =
+  let (fstT, fstF) = guardgen rho b1 trueListAct falseListAct trueAct falseAct False
+      (sndT, sndF) = guardgen rho b2 trueListAct falseListAct trueAct falseAct True
+      ndcTrue = genNonDetChoice sndT
+      newFst = map (`PrefixP` ndcTrue) fstT
+      newSnd = map (`PrefixP` falseAct) fstF
+   in (newFst, falseListAct ++ sndF ++ newSnd)
+guardgen rho (BBinOp Or b1 b2) trueListAct falseListAct trueAct falseAct isSecond =
+  let (fstT, fstF) = guardgen rho b1 trueListAct falseListAct trueAct falseAct False
+      (sndT, sndF) = guardgen rho b2 trueListAct falseListAct trueAct falseAct True
+      ndcFalse = genNonDetChoice sndF
+      newFst = map (`PrefixP` trueAct) fstT
+      newSnd = map (`PrefixP` ndcFalse) fstF
+   in (trueListAct ++ sndT ++ newFst, newSnd)
+
+concateval rho nameProc c proclist procListname restrictions i =
   case c of
-    Skip -> ActionP $ Coaction "done"
+    Concat c1 c2 ->
+      case c1 of
+        Skip ->
+          let nn = newname i
+              proc = ProcDef (Cst nameProc) (PrefixP tau (ProcVar $ Cst nn))
+           in concateval rho nn c2 (proclist ++ [proc]) (procListname ++ [nameProc]) restrictions (i + 1)
+        VarIAssign v e ->
+          let nn = newname i
+              action = assAexpreval rho v e
+              proc = ProcDef (Cst nameProc) $ PrefixP (cact action) (ProcVar $ Cst nn)
+           in concateval rho nn c2 (proclist ++ [proc]) (procListname ++ [nameProc]) restrictions (i + 1)
+        VarBAssign v be ->
+          let nn = newname i
+              action = assBexpreval rho v be
+              proc = ProcDef (Cst nameProc) $ PrefixP (cact action) (ProcVar $ Cst nn)
+           in concateval rho nn c2 (proclist ++ [proc]) (procListname ++ [nameProc]) restrictions (i + 1)
+        If b cthen celse ->
+          let nn = newname i
+              nn1 = newname (i + 1)
+              nn2 = newname (i + 2)
+              (tAct, fAct) = guardgen rho b [] [] (ProcVar (Cst nn1)) (ProcVar (Cst nn2)) True
+              proc = ProcDef (Cst nameProc) $ genNonDetChoice $ tAct ++ fAct
+              --proc1 = translateCom rho (Cst nn1) cthen
+              --proc2 = translateCom rho (Cst nn2) celse
+              (proclist1, procname1) = concateval rho nn1 cthen [] [] [] (i + 3)
+              (proclist2, procname2) = concateval rho nn2 celse [] [] [] (i + 4)
+           in concateval rho nn c2 (proclist ++ [proc] ++ proclist1 ++ proclist2) (procListname ++ [nameProc] ++ procname1 ++ procname2) restrictions (i + 3)
+        _ -> error "Not implemented yet"
+    Skip -> (proclist ++ [ProcDef (Cst nameProc) $ PrefixP tau doneCommand], procListname ++ [nameProc])
     VarIAssign v e ->
-      let e' = evalCstAExpr e
-          eRange = fromJust $ Map.lookup v $ defIid rho
-          action = v ++ "w" ++ show e'
-       in if e' `elem` eRange
-            then ActionP $ Coaction action
-            else error $ "invalid value for " ++ v
+      let action = assAexpreval rho v e
+       in (proclist ++ [ProcDef (Cst nameProc) $ PrefixP (cact action) doneCommand], procListname ++ [nameProc])
     VarBAssign v be ->
       let be' = evalCstBExpr be
           beRange = fromJust $ Map.lookup v $ defBid rho
           action = v ++ "w" ++ show be'
        in if be' `elem` beRange
-            then ActionP $ Coaction action
+            then (proclist ++ [ProcDef (Cst nameProc) $ PrefixP (cact action) doneCommand], procListname ++ [nameProc])
             else error $ "invalid value for " ++ v
-    Concat c1 c2 ->
-      Restriction (ParallelComp p1 p2) ["seq"]
-      where
-        p1 = PrefixP (translateCom rho c1) (ActionP $ Action "seq")
-        p2 = PrefixP (ActionP $ Coaction "seq") (translateCom rho c2)
-    If b c1 c2 ->
-      NonDetChoise p1 p2
-      where
-        ct1 = translateCom rho c1
-        ct2 = translateCom rho c2
-        p1 = transGuardTrue rho b ct1
-        p2 = transGuardFalse rho b ct2
+    If b cthen celse ->
+      let nn = newname i
+          nn1 = newname (i + 1)
+          nn2 = newname (i + 2)
+          (tAct, fAct) = guardgen rho b [] [] (ProcVar (Cst nn1)) (ProcVar (Cst nn2)) True
+          proc = ProcDef (Cst nameProc) $ genNonDetChoice $ tAct ++ fAct
+          proc1 = ProcDef (Cst nn1) Nil --translateCom rho (Cst nn1) cthen
+          proc2 = ProcDef (Cst nn2) Nil --translateCom rho (Cst nn2) celse
+       in (proclist ++ [proc] ++ [proc1] ++ [proc2], procListname ++ [nameProc, nn1, nn2])
+    _ -> error "Not implemented yet"
 
-{- Concat x:y:xs ->
-   let channel = "done" + show $ incrCounter 1 counter
-   let
-   in
-     counter = newCounter 0 -}
+translateCom rho name c =
+  case name of
+    Cst s ->
+      let (proclist, procListName) = concateval rho s c [] [] [] 0
+       in proclist
+    _ -> error "Only constant Process can be translated"
 
-translateProc rho p =
+translateProc rho name p =
   case p of
-    ActionP a -> ActionP a
-    CommandP c -> translateCom rho c
-    _ -> p
+    ActionP a -> [ProcDef name $ ActionP a]
+    CommandP c -> translateCom rho name c
+    _ -> [ProcDef name p]
 
 translateStmt rho (ProcDef n p) =
-  let p' = translateProc rho p
-      rho' = rho {prog = prog rho ++ [ProcDef n p']}
+  let plist = translateProc rho n p
+      rho' = rho {prog = prog rho ++ plist}
+   in Right rho'
+translateStmt rho (SetDef n l) =
+  let rho' = rho {prog = prog rho ++ [SetDef n l]}
    in Right rho'
 translateStmt rho _ =
   Left "Invalid definition"
@@ -428,3 +558,4 @@ main = do
   let res2 = foldl translate (res1 {prog = []}) $ prog res1
   print res
   print res1
+  print res2

@@ -294,7 +294,9 @@ aOperators =
   ]
 
 bOperators =
-  [ [Prefix (reservedOp "not" >> return Not)],
+  [ [ Prefix (reservedOp "not" >> return Not),
+      Prefix (reservedOp "!" >> return Not)
+    ],
     [ Infix (reservedOp "and" >> return (BBinOp And)) AssocLeft,
       Infix (reservedOp "&&" >> return (BBinOp And)) AssocLeft
     ],
