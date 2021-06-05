@@ -11,7 +11,6 @@ import Data.Maybe
 import Data.Set (Set)
 import qualified Data.Set as Set
 import MC_Parser
-import System.Environment
 
 data Rho = Rho
   { pid :: [String],
@@ -269,7 +268,8 @@ semantCheck rho (VarDef name v) =
         else
           ( let v' = evalRangeCmp co i1 i2
                 rho' = rho {defIid = Map.insert name v' $ defIid rho}
-             in Right rho'
+                rho'' = varIProc rho' name v'
+             in Right rho''
           )
     Range il ->
       if isIntVarDef rho name
@@ -329,7 +329,7 @@ varBProc rho name v' =
           chanName = map Data.Char.toLower name
        in case length v' of
             1 ->
-              let procName1 = procName ++ "W"
+              let procName1 = procName
                   procName2 = procName ++ map Data.Char.toUpper (show $ head v')
                   inputname = chanName ++ "w" ++ map Data.Char.toLower (show $ head v')
                   outputname = chanName ++ "r" ++ map Data.Char.toLower (show $ head v')
@@ -341,7 +341,7 @@ varBProc rho name v' =
                   progExt = [ProcDef (Cst procName1) procBody1, ProcDef (Cst procName2) procBody2]
                in rho {pid = pid rho ++ [procName1, procName2], prog = prog rho ++ progExt}
             2 ->
-              let procName1 = procName ++ "W"
+              let procName1 = procName
                   procName2 = procName ++ "TRUE"
                   procName3 = procName ++ "FALSE"
                   inputname2 = chanName ++ "wtrue"
@@ -360,7 +360,7 @@ varBProc rho name v' =
                     NonDetChoise
                       (PrefixP (ActionP $ Coaction outputname3) (ProcVar $ Cst procName3))
                       (ProcVar $ Cst procName1)
-                  progExt = [ProcDef (Cst procName1) procBody1, ProcDef (Cst procName2) procBody2, ProcDef (Cst procName2) procBody3]
+                  progExt = [ProcDef (Cst procName1) procBody1, ProcDef (Cst procName2) procBody2, ProcDef (Cst procName3) procBody3]
                in rho {pid = pid rho ++ [procName1, procName2, procName3], prog = prog rho ++ progExt}
             _ -> error "Variable cannot be instatiated"
     else error "The first letter of a boolean variable name must be lower case."
@@ -544,14 +544,3 @@ translate rho def =
   case translateStmt rho def of
     Left e -> error $ show e
     Right r -> r
-
-main = do
-  [filename] <- getArgs
-  source <- readFile filename
-  let res = parseSource source
-  let rho = Rho {pid = [], setid = Map.empty, defIid = Map.empty, defBid = Map.empty, prog = [], counter = 0}
-  let res1 = foldl testSeman rho res
-  let res2 = foldl translate (res1 {prog = []}) $ prog res1
-  print res
-  print res1
-  print res2
