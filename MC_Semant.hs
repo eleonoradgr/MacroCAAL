@@ -479,8 +479,8 @@ concateval rho nameProc c procListname lastCommand restrictions i =
               nn2 = newname $ counter rho + 2
               (tAct, fAct) = guardgen rho b (ProcVar (Cst nn1)) (ProcVar (Cst nn2)) True
               proc = ProcDef (Cst nameProc) $ genNonDetChoice $ tAct ++ fAct
-              (rho1, procname1) = concateval rho {prog = prog rho ++ [proc], counter = counter rho + 3} nn1 cthen [] lastCommand [] (i + 3)
-              (rho2, procname2) = concateval rho1 nn2 celse [] lastCommand [] (i + 4)
+              (rho1, procname1) = concateval rho {prog = prog rho ++ [proc], counter = counter rho + 3} nn1 cthen [] (ProcVar (Cst nn)) [] (i + 3)
+              (rho2, procname2) = concateval rho1 nn2 celse [] (ProcVar (Cst nn)) [] (i + 4)
            in concateval rho2 nn c2 (procListname ++ [nameProc] ++ procname1 ++ procname2) lastCommand restrictions (i + 3)
         While b doc ->
           let nn1 = newname $ counter rho

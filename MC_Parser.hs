@@ -154,9 +154,9 @@ ifc =
     reserved "if"
     b <- bExpr
     reserved "then"
-    t <- command
+    t <- braces command
     reserved "else"
-    e <- command
+    e <- braces command
     optseq <- optionMaybe seqc
     if isJust optseq
       then return $ Concat (If b t e) (fromJust optseq)

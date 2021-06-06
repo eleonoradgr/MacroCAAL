@@ -84,5 +84,4 @@ main = do
   writeFile ("CCS" ++ filename) p
   print res
   print res1
-  print res2
   print p
