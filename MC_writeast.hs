@@ -83,5 +83,5 @@ main = do
   let p = astToCCS $ prog res2
   writeFile ("CCS" ++ filename) p
   print res
-  print res1
+  print res2
   print p

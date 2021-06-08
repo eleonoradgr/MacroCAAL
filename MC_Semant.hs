@@ -525,11 +525,44 @@ translateCom rho name c =
        in rho'
     _ -> error "Only constant Process can be translated"
 
-translateProc rho name p =
+translateProcAus rho p =
   case p of
+    Nil -> (rho, Nil)
+    ProcVar pn -> (rho, ProcVar pn)
+    ActionP a -> (rho, ActionP a)
+    CommandP c ->
+      let nn = newname $ counter rho
+          rho' = translateCom rho {counter = counter rho + 1} (Cst nn) c
+       in (rho', ProcVar $ Cst nn)
+    PrefixP p1 p2 ->
+      let (rho', proc1) = translateProcAus rho p1
+          (rho'', proc2) = translateProcAus rho' p2
+       in (rho'', PrefixP proc1 proc2)
+    Restriction p1 slist ->
+      let (rho', proc1) = translateProcAus rho p1
+       in --TODO expand list of restrictions
+          (rho', Restriction proc1 slist)
+    Relabelling p1 slist ->
+      let (rho', proc1) = translateProcAus rho p1
+       in (rho', Relabelling proc1 slist)
+    NonDetChoise p1 p2 ->
+      let (rho', proc1) = translateProcAus rho p1
+          (rho'', proc2) = translateProcAus rho' p2
+       in (rho'', NonDetChoise proc1 proc2)
+    ParallelComp p1 p2 ->
+      let (rho', proc1) = translateProcAus rho p1
+          (rho'', proc2) = translateProcAus rho' p2
+       in (rho'', ParallelComp proc1 proc2)
+
+{-translateProc rho name p =
+  case p of
+    -- TODO: management of input and output
     ActionP a -> rho {prog = prog rho ++ [ProcDef name $ ActionP a]}
     CommandP c -> translateCom rho name c
-    _ -> rho {prog = prog rho ++ [ProcDef name p]}
+    _ -> rho {prog = prog rho ++ [ProcDef name p]}-}
+translateProc rho name p =
+  let (rho', p') = translateProcAus rho p
+   in rho' {prog = prog rho' ++ [ProcDef name p']}
 
 translateStmt rho (ProcDef n p) =
   let rho' = translateProc rho n p
