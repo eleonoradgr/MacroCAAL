@@ -3,10 +3,10 @@ Syntax extension for [CAAL tool](http://caal.cs.aau.dk/).
 
 compile:
 ```
-ghc --make -o parser -main-is MC_Semant MC_Semant.hs
-```
+ghc --make -o macroCAAL -main-is MC_writeast  MC_writeast.hs```
 
 test:
 ```
-./parser test.txt
+./macroCAAL test.txt 
+
 ```
