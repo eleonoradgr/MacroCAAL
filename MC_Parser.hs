@@ -120,6 +120,8 @@ command =
     <|> boolass
     <|> ifc
     <|> whilec
+    <|> inc
+    <|> dec
 
 skip =
   do
@@ -172,6 +174,24 @@ whilec =
     if isJust optseq
       then return $ Concat (While b c) (fromJust optseq)
       else return $ While b c
+
+inc =
+  do
+    reserved "inc"
+    var <- identifier
+    optseq <- optionMaybe seqc
+    if isJust optseq
+      then return $ Concat (Inc var) (fromJust optseq)
+      else return $ Inc var
+
+dec =
+  do
+    reserved "dec"
+    var <- identifier
+    optseq <- optionMaybe seqc
+    if isJust optseq
+      then return $ Concat (Dec var) (fromJust optseq)
+      else return $ Dec var
 
 seqc =
   do

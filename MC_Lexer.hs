@@ -52,7 +52,9 @@ languageDef =
           "not",
           "&&",
           "||",
-          "!"
+          "!",
+          "inc",
+          "decs"
         ],
       Token.caseSensitive = True
     }

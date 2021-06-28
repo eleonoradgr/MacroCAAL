@@ -47,6 +47,8 @@ data Command
   = Skip
   | VarIAssign String AExpr
   | VarBAssign String BExpr
+  | Inc String
+  | Dec String
   | Concat Command Command
   | If BExpr Command Command
   | While BExpr Command

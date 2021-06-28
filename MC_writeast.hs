@@ -79,9 +79,10 @@ main = do
   let res = parseSource source
   let rho = Rho {pid = [], setid = Map.empty, defIid = Map.empty, defBid = Map.empty, prog = [], counter = 0}
   let res1 = foldl testSeman rho res
-  let res2 = foldl translate (res1 {prog = []}) $ prog res1
-  let p = astToCCS $ prog res2
-  writeFile ("CCS" ++ filename) p
-  print res
-  print res2
-  print p
+  --let res2 = foldl translate (res1 {prog = []}) $ prog res1
+  --let p = astToCCS $ prog res2
+  --writeFile ("CCS" ++ filename) p
+  print res1
+
+--print res2
+--print p

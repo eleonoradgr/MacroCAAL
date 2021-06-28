@@ -113,8 +113,7 @@ evalCstBExpr (BBinOp bop bexpr1 bexpr2) =
   where
     e1 = evalCstBExpr bexpr1
     e2 = evalCstBExpr bexpr2
-
-evalCstBexpr (CmpOp cop expr1 expr2) =
+evalCstBExpr (CmpOp cop expr1 expr2) =
   case cop of
     Lt -> e1 < e2
     Gt -> e1 > e2
@@ -125,6 +124,8 @@ evalCstBexpr (CmpOp cop expr1 expr2) =
   where
     e1 = evalCstAExpr expr1
     e2 = evalCstAExpr expr2
+evalCstBExpr _ =
+  error "Non constant evaluation"
 
 {-evalBExpr rho T usedVar = (True, usedVar)
 evalBExpr rho F usedVar = (False, usedVar)
@@ -298,7 +299,7 @@ varIProc rho name li =
     else rho
 
 variableProc procName chanName li lp =
-  case li of
+  {-case li of
     [] -> lp
     (x : xs) ->
       let procName1 = procName ++ map Data.Char.toUpper (show x)
@@ -307,7 +308,52 @@ variableProc procName chanName li lp =
           procwrite = ProcVar $ Cst procName
           procBody = NonDetChoise procread procwrite
           lp' = lp ++ [ProcDef (Cst procName1) procBody]
-       in variableProc procName chanName xs lp'
+       in variableProc procName chanName xs lp'-}
+  variableProcAus procName chanName li lp False ""
+
+variableProcAus procName chanName li lp prec precName =
+  case li of
+    [] -> lp
+    [x] ->
+      let procName1 = procName ++ map Data.Char.toUpper (show x)
+          outputchan = chanName ++ "r" ++ map Data.Char.toLower (show x)
+          procread = PrefixP (ActionP $ Coaction outputchan) (ProcVar $ Cst procName1)
+          procwrite = ProcVar $ Cst procName
+          decaction =
+            if prec
+              then
+                let actName = chanName ++ "Dec"
+                    act = PrefixP (ActionP $ Action actName) (ProcVar $ Cst precName)
+                 in Just act
+              else Nothing
+          procBody =
+            if isJust decaction
+              then NonDetChoise procread $ NonDetChoise procwrite $fromJust decaction
+              else NonDetChoise procread procwrite
+          lp' = lp ++ [ProcDef (Cst procName1) procBody]
+       in lp'
+    (x : y : xs) ->
+      let procName1 = procName ++ map Data.Char.toUpper (show x)
+          outputchan = chanName ++ "r" ++ map Data.Char.toLower (show x)
+          procread = PrefixP (ActionP $ Coaction outputchan) (ProcVar $ Cst procName1)
+          procwrite = ProcVar $ Cst procName
+          decaction =
+            if prec
+              then
+                let actName = chanName ++ "Dec"
+                    act = PrefixP (ActionP $ Action actName) (ProcVar $ Cst precName)
+                 in Just act
+              else Nothing
+          incaction =
+            let actName = chanName ++ "Inc"
+                nextName = procName ++ map Data.Char.toUpper (show y)
+             in PrefixP (ActionP $ Action actName) (ProcVar $ Cst nextName)
+          procBody =
+            if isJust decaction
+              then NonDetChoise procread $ NonDetChoise procwrite $ NonDetChoise incaction $fromJust decaction
+              else NonDetChoise procread $ NonDetChoise procwrite incaction
+          lp' = lp ++ [ProcDef (Cst procName1) procBody]
+       in variableProcAus procName chanName (y : xs) lp' True procName1
 
 writingProc procName chanName li =
   case li of
@@ -321,6 +367,7 @@ writingProc procName chanName li =
           inputchan = chanName ++ "w" ++ map Data.Char.toLower (show x)
           procwrite = PrefixP (ActionP $ Action inputchan) (ProcVar $ Cst procDest)
        in NonDetChoise procwrite (writingProc procName chanName xs)
+    _ -> error "e"
 
 varBProc rho name v' =
   if firstLower name
