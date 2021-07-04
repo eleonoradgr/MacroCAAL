@@ -44,29 +44,6 @@ isBoolVarDef rho name =
 
 newtype Counter = Counter {x :: IORef Int}
 
-{-makeCounter i = do
-  iref <- newIORef i
-  return (Counter iref)
-
-incCounter i (Counter c) = modifyIORef c (+ i)
-
-showCounter (Counter c) =
-  do
-    c' <- readIORef c
-    return $show c'
-
-counter = makeCounter 0-}
-
-data IType
-  = IInt Integer
-  | IBool Bool
-  | IUndef
-
-instance Show IType where
-  show (IInt i) = show i
-  show (IBool b) = show b
-  show IUndef = "undef"
-
 {- Expression evaluation for process parameters -}
 evalAExpr rho (Int val) usedVar = (val, usedVar)
 evalAExpr rho (Neg expr) usedVar =
@@ -161,19 +138,15 @@ addProcDef rho procName =
     then error $ "Process " ++ procName ++ " already defined defined"
     else rho {pid = pid rho ++ [procName]}
 
-{-parToCstCom rho c =
-  case c of
-    Concat c1 c2 ->
-      let clist' = map (parToCstCom rho) clist
-       in Concat clist'
-    If b p1 p2 ->
-      let p1' = parToCstProc rho p1
-          p2' = parToCstProc rho p2
-       in If b p1' p2'
-    While b p ->
-      let p' = parToCstProc rho p
-       in While b p'
-    _ -> c -}
+tau = ActionP $ Action "tau"
+
+act name = ActionP $ Action name
+
+cact name = ActionP $ Coaction name
+
+doneCommand = PrefixP (cact "done") Nil
+
+newname i = "PROG" ++ show i
 
 parToCstProc rho p =
   case p of
@@ -317,14 +290,14 @@ variableProcAus procName chanName li lp prec precName =
     [x] ->
       let procName1 = procName ++ map Data.Char.toUpper (show x)
           outputchan = chanName ++ "r" ++ map Data.Char.toLower (show x)
-          procread = PrefixP (ActionP $ Coaction outputchan) (ProcVar $ Cst procName1)
+          procread = PrefixP (cact outputchan) (ProcVar $ Cst procName1)
           procwrite = ProcVar $ Cst procName
           decaction =
             if prec
               then
                 let actName = chanName ++ "Dec"
-                    act = PrefixP (ActionP $ Action actName) (ProcVar $ Cst precName)
-                 in Just act
+                    actvar = PrefixP (act actName) (ProcVar $ Cst precName)
+                 in Just actvar
               else Nothing
           procBody =
             if isJust decaction
@@ -335,19 +308,19 @@ variableProcAus procName chanName li lp prec precName =
     (x : y : xs) ->
       let procName1 = procName ++ map Data.Char.toUpper (show x)
           outputchan = chanName ++ "r" ++ map Data.Char.toLower (show x)
-          procread = PrefixP (ActionP $ Coaction outputchan) (ProcVar $ Cst procName1)
+          procread = PrefixP (cact outputchan) (ProcVar $ Cst procName1)
           procwrite = ProcVar $ Cst procName
           decaction =
             if prec
               then
                 let actName = chanName ++ "Dec"
-                    act = PrefixP (ActionP $ Action actName) (ProcVar $ Cst precName)
-                 in Just act
+                    actvar = PrefixP (act actName) (ProcVar $ Cst precName)
+                 in Just actvar
               else Nothing
           incaction =
             let actName = chanName ++ "Inc"
                 nextName = procName ++ map Data.Char.toUpper (show y)
-             in PrefixP (ActionP $ Action actName) (ProcVar $ Cst nextName)
+             in PrefixP (act actName) (ProcVar $ Cst nextName)
           procBody =
             if isJust decaction
               then NonDetChoise procread $ NonDetChoise procwrite $ NonDetChoise incaction $fromJust decaction
@@ -360,12 +333,12 @@ writingProc procName chanName li =
     [x] ->
       let procDest = procName ++ map Data.Char.toUpper (show x)
           inputchan = chanName ++ "w" ++ map Data.Char.toLower (show x)
-          procwrite = PrefixP (ActionP $ Action inputchan) (ProcVar $ Cst procDest)
+          procwrite = PrefixP (act inputchan) (ProcVar $ Cst procDest)
        in procwrite
     (x : xs) ->
       let procDest = procName ++ map Data.Char.toUpper (show x)
           inputchan = chanName ++ "w" ++ map Data.Char.toLower (show x)
-          procwrite = PrefixP (ActionP $ Action inputchan) (ProcVar $ Cst procDest)
+          procwrite = PrefixP (act inputchan) (ProcVar $ Cst procDest)
        in NonDetChoise procwrite (writingProc procName chanName xs)
     _ -> error "e"
 
@@ -380,10 +353,10 @@ varBProc rho name v' =
                   procName2 = procName ++ map Data.Char.toUpper (show $ head v')
                   inputname = chanName ++ "w" ++ map Data.Char.toLower (show $ head v')
                   outputname = chanName ++ "r" ++ map Data.Char.toLower (show $ head v')
-                  procBody1 = PrefixP (ActionP $ Action inputname) (ProcVar $ Cst procName2)
+                  procBody1 = PrefixP (act inputname) (ProcVar $ Cst procName2)
                   procBody2 =
                     NonDetChoise
-                      (PrefixP (ActionP $ Coaction outputname) (ProcVar $ Cst procName2))
+                      (PrefixP (cact outputname) (ProcVar $ Cst procName2))
                       (ProcVar $ Cst procName1)
                   progExt = [ProcDef (Cst procName1) procBody1, ProcDef (Cst procName2) procBody2]
                in rho {pid = pid rho ++ [procName1, procName2], prog = prog rho ++ progExt}
@@ -397,15 +370,15 @@ varBProc rho name v' =
                   outputname3 = chanName ++ "rfalse"
                   procBody1 =
                     NonDetChoise
-                      (PrefixP (ActionP $ Action inputname2) (ProcVar $ Cst procName2))
-                      (PrefixP (ActionP $ Action inputname3) (ProcVar $ Cst procName3))
+                      (PrefixP (act inputname2) (ProcVar $ Cst procName2))
+                      (PrefixP (act inputname3) (ProcVar $ Cst procName3))
                   procBody2 =
                     NonDetChoise
-                      (PrefixP (ActionP $ Coaction outputname2) (ProcVar $ Cst procName2))
+                      (PrefixP (cact outputname2) (ProcVar $ Cst procName2))
                       (ProcVar $ Cst procName1)
                   procBody3 =
                     NonDetChoise
-                      (PrefixP (ActionP $ Coaction outputname3) (ProcVar $ Cst procName3))
+                      (PrefixP (cact outputname3) (ProcVar $ Cst procName3))
                       (ProcVar $ Cst procName1)
                   progExt = [ProcDef (Cst procName1) procBody1, ProcDef (Cst procName2) procBody2, ProcDef (Cst procName3) procBody3]
                in rho {pid = pid rho ++ [procName1, procName2, procName3], prog = prog rho ++ progExt}
@@ -433,16 +406,6 @@ assBexpreval rho v be =
         then action
         else error $ "invalid value for " ++ v
 
-doneCommand = PrefixP (ActionP $ Coaction "done") Nil
-
-tau = ActionP $ Action "tau"
-
-act name = ActionP $ Action name
-
-cact name = ActionP $ Coaction name
-
-newname i = "PROG" ++ show i
-
 genNonDetChoice proclist =
   case proclist of
     [x] -> x
@@ -459,18 +422,18 @@ guardgen rho F trueAct falseAct isSecond
 guardgen rho (BVar v) trueAct falseAct isSecond =
   let bRange = getBoolVar rho v
       tAct =
-        [ActionP $ Action $ v ++ "rtrue" | True `elem` bRange]
+        [act $ v ++ "rtrue" | True `elem` bRange]
       fAct =
-        [ActionP $ Action $ v ++ "rfalse" | False `elem` bRange]
+        [act $ v ++ "rfalse" | False `elem` bRange]
    in if isSecond
         then (map (`PrefixP` trueAct) tAct, map (`PrefixP` falseAct) fAct)
         else (tAct, fAct)
 guardgen rho (CmpOp Eq (Var v) e) trueAct falseAct isSecond =
   let bRange = getIntVar rho v
       e' = evalCstAExpr e
-      listT = [ActionP $ Action $ v ++ "r" ++ show e']
+      listT = [act $ v ++ "r" ++ show e']
       falseass = List.delete e' bRange
-      listF = map (\x -> ActionP $ Action $ v ++ "r" ++ show x) falseass
+      listF = map (\x -> act $ v ++ "r" ++ show x) falseass
    in if e' `elem` bRange
         then
           if isSecond
@@ -522,13 +485,13 @@ concateval rho nameProc c procListname lastCommand restrictions i =
            in concateval rho' nn c2 (procListname ++ [nameProc]) lastCommand restrictions (i + 1)
         Inc v ->
           let nn = newname $ counter rho
-              incact = ActionP $ Coaction $ v ++ "Inc"
+              incact = cact $ v ++ "Inc"
               proc = ProcDef (Cst nameProc) (PrefixP incact (ProcVar $ Cst nn))
               rho' = rho {prog = prog rho ++ [proc], counter = counter rho + 1}
            in concateval rho' nn c2 (procListname ++ [nameProc]) lastCommand restrictions (i + 1)
         Dec v ->
           let nn = newname $ counter rho
-              decact = ActionP $ Coaction $ v ++ "Dec"
+              decact = cact $ v ++ "Dec"
               proc = ProcDef (Cst nameProc) (PrefixP decact (ProcVar $ Cst nn))
               rho' = rho {prog = prog rho ++ [proc], counter = counter rho + 1}
            in concateval rho' nn c2 (procListname ++ [nameProc]) lastCommand restrictions (i + 1)
@@ -561,10 +524,10 @@ concateval rho nameProc c procListname lastCommand restrictions i =
             then (rho {prog = prog rho ++ [ProcDef (Cst nameProc) $ PrefixP (cact action) lastCommand]}, procListname ++ [nameProc])
             else error $ "invalid value for " ++ v
     Inc v ->
-      let incact = ActionP $ Coaction $ v ++ "Inc"
+      let incact = cact $ v ++ "Inc"
        in (rho {prog = prog rho ++ [ProcDef (Cst nameProc) $ PrefixP incact lastCommand]}, procListname ++ [nameProc])
     Dec v ->
-      let decact = ActionP $ Coaction $ v ++ "Dec"
+      let decact = cact $ v ++ "Dec"
        in (rho {prog = prog rho ++ [ProcDef (Cst nameProc) $ PrefixP decact lastCommand]}, procListname ++ [nameProc])
     If b cthen celse ->
       let nn = newname $ counter rho
