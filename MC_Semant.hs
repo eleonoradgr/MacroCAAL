@@ -520,6 +520,18 @@ concateval rho nameProc c procListname lastCommand restrictions i =
               proc = ProcDef (Cst nameProc) $ PrefixP (cact action) (ProcVar $ Cst nn)
               rho' = rho {prog = prog rho ++ [proc], counter = counter rho + 1}
            in concateval rho' nn c2 (procListname ++ [nameProc]) lastCommand restrictions (i + 1)
+        Inc v ->
+          let nn = newname $ counter rho
+              incact = ActionP $ Coaction $ v ++ "Inc"
+              proc = ProcDef (Cst nameProc) (PrefixP incact (ProcVar $ Cst nn))
+              rho' = rho {prog = prog rho ++ [proc], counter = counter rho + 1}
+           in concateval rho' nn c2 (procListname ++ [nameProc]) lastCommand restrictions (i + 1)
+        Dec v ->
+          let nn = newname $ counter rho
+              decact = ActionP $ Coaction $ v ++ "Dec"
+              proc = ProcDef (Cst nameProc) (PrefixP decact (ProcVar $ Cst nn))
+              rho' = rho {prog = prog rho ++ [proc], counter = counter rho + 1}
+           in concateval rho' nn c2 (procListname ++ [nameProc]) lastCommand restrictions (i + 1)
         If b cthen celse ->
           let nn = newname $ counter rho
               nn1 = newname $ counter rho + 1
@@ -548,6 +560,12 @@ concateval rho nameProc c procListname lastCommand restrictions i =
        in if be' `elem` beRange
             then (rho {prog = prog rho ++ [ProcDef (Cst nameProc) $ PrefixP (cact action) lastCommand]}, procListname ++ [nameProc])
             else error $ "invalid value for " ++ v
+    Inc v ->
+      let incact = ActionP $ Coaction $ v ++ "Inc"
+       in (rho {prog = prog rho ++ [ProcDef (Cst nameProc) $ PrefixP incact lastCommand]}, procListname ++ [nameProc])
+    Dec v ->
+      let decact = ActionP $ Coaction $ v ++ "Dec"
+       in (rho {prog = prog rho ++ [ProcDef (Cst nameProc) $ PrefixP decact lastCommand]}, procListname ++ [nameProc])
     If b cthen celse ->
       let nn = newname $ counter rho
           nn1 = newname $ counter rho + 1

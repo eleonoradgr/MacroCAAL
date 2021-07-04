@@ -117,7 +117,7 @@ input =
 command =
   skip
     <|> try ass
-    <|> boolass
+    <|> try boolass
     <|> ifc
     <|> whilec
     <|> inc
