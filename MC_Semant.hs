@@ -390,6 +390,84 @@ testSeman rho def =
     Left e -> error $ show e
     Right r -> r
 
+outputSubs var val p =
+  case p of
+    ActionP (Output varout par) -> if par == var then cact $ varout ++ val else p
+    PrefixP p1 p2 ->
+      let p1' = outputSubs var val p1
+          p2' = outputSubs var val p2
+       in PrefixP p1' p2'
+    Restriction p slist ->
+      let p' = outputSubs var val p
+       in Restriction p' slist
+    Relabelling p rellist ->
+      let p' = outputSubs var val p
+       in Relabelling p' rellist
+    NonDetChoise p1 p2 ->
+      let p1' = outputSubs var val p1
+          p2' = outputSubs var val p2
+       in NonDetChoise p1' p2'
+    ParallelComp p1 p2 ->
+      let p1' = outputSubs var val p1
+          p2' = outputSubs var val p2
+       in ParallelComp p1' p2'
+    _ -> p
+
+inputPropagation var list cont =
+  case cont of
+    Nothing -> case length list of
+      1 -> act $ var ++ show (head list)
+      n -> NonDetChoise (act $ var ++ show (head list)) (inputPropagation var (tail list) Nothing)
+    Just p ->
+      case length list of
+        1 ->
+          let a = act $ var ++ show (head list)
+           in PrefixP a $ outputSubs var (show (head list)) p
+        n ->
+          let a = act $ var ++ show (head list)
+              p' = PrefixP a $ outputSubs var (show (head list)) p
+           in NonDetChoise p' $ inputPropagation var (tail list) cont
+
+inputFinder rho p =
+  case p of
+    ActionP (Input var par) ->
+      let listval = getIntVar rho par
+       in inputPropagation par listval Nothing
+    PrefixP (ActionP (Input var par)) p2 ->
+      let listval = getIntVar rho par
+          newproc = inputPropagation par listval $ Just p2
+       in inputFinder rho newproc
+    PrefixP p1 p2 ->
+      let p1' = inputFinder rho p1
+          p2' = inputFinder rho p2
+       in PrefixP p1' p2'
+    Restriction p slist ->
+      let p' = inputFinder rho p
+       in Restriction p' slist
+    Relabelling p rellist ->
+      let p' = inputFinder rho p
+       in Relabelling p' rellist
+    NonDetChoise p1 p2 ->
+      let p1' = inputFinder rho p1
+          p2' = inputFinder rho p2
+       in NonDetChoise p1' p2'
+    ParallelComp p1 p2 ->
+      let p1' = inputFinder rho p1
+          p2' = inputFinder rho p2
+       in ParallelComp p1' p2'
+    _ -> p
+
+valuePassingAus rho (ProcDef name p) =
+  let p' = inputFinder rho p
+   in rho {prog = prog rho ++ [ProcDef name p']}
+valuePassingAus rho (SetDef name l) =
+  rho {prog = prog rho ++ [SetDef name l]}
+valuePassingAus rho (VarDef name v) =
+  rho {prog = prog rho ++ [VarDef name v]}
+
+valuePassing rho =
+  foldl valuePassingAus (rho {prog = []}) $ prog rho
+
 assAexpreval rho v e =
   let e' = evalCstAExpr e
       eRange = getIntVar rho v
@@ -422,7 +500,7 @@ guardgen rho F trueAct falseAct isSecond
 guardgen rho (BVar v) trueAct falseAct isSecond =
   let bRange = getBoolVar rho v
       tAct =
-        [act $ v ++ "rtrue" | True `elem` bRange]
+        [act $ v ++ "rtrue" | or bRange]
       fAct =
         [act $ v ++ "rfalse" | False `elem` bRange]
    in if isSecond

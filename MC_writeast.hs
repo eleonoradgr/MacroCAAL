@@ -19,6 +19,8 @@ procToStingAus p s paren =
       if paren then "( " ++ a ++ " ) " else a ++ " "
     ActionP (Coaction c) ->
       if paren then "( '" ++ c ++ " ) " else "'" ++ c ++ " "
+    ActionP (Output var par) ->
+      if paren then "( '" ++ var ++ par ++ " ) " else "'" ++ var ++ par ++ " "
     PrefixP p1 p2 ->
       let s1 = procToStingAus p1 [] False
        in case p2 of
@@ -79,10 +81,11 @@ main = do
   let res = parseSource source
   let rho = Rho {pid = [], setid = Map.empty, defIid = Map.empty, defBid = Map.empty, prog = [], counter = 0}
   let res1 = foldl testSeman rho res
-  let res2 = foldl translate (res1 {prog = []}) $ prog res1
-  let p = astToCCS $ prog res2
+  let res2 = valuePassing res1
+  let res3 = foldl translate (res2 {prog = []}) $ prog res2
+  let p = astToCCS $ prog res3
   writeFile ("CCS" ++ filename) p
-  print res1
+  print res2
 
 --print res2
 --print p
