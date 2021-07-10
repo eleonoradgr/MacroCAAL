@@ -631,6 +631,23 @@ translateCom rho name c =
        in rho'
     _ -> error "Only constant Process can be translated"
 
+generateChannels a values acc =
+  case values of
+    [] -> acc ++ [a, a ++ "Inc", a ++ "Dec"]
+    [x] -> generateChannels a [] $ acc ++ [a ++ "r" ++ (show x)] ++ [a ++ "w" ++ (show x)]
+    (x : xs) -> generateChannels a xs $ acc ++ [a ++ "r" ++ (show x)] ++ [a ++ "w" ++ (show x)]
+
+expandRest rho slist =
+  let expandList a
+        | isIntVarDef rho a =
+          let values = getIntVar rho a
+           in generateChannels a values []
+        | isBoolVarDef rho a =
+          let values = getBoolVar rho a
+           in generateChannels a values []
+        | otherwise = [a]
+   in concat $ map expandList slist
+
 translateProcAus rho p =
   case p of
     Nil -> (rho, Nil)
@@ -646,8 +663,9 @@ translateProcAus rho p =
        in (rho'', PrefixP proc1 proc2)
     Restriction p1 slist ->
       let (rho', proc1) = translateProcAus rho p1
+          slist' = expandRest rho slist
        in --TODO expand list of restrictions
-          (rho', Restriction proc1 slist)
+          (rho', Restriction proc1 slist')
     Relabelling p1 slist ->
       let (rho', proc1) = translateProcAus rho p1
        in (rho', Relabelling proc1 slist)
