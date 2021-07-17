@@ -75,10 +75,12 @@ actionPrefix =
 prefixC =
   do
     c <- command
-    mp <- optionMaybe prefixcompose
-    if isJust mp
-      then return $ PrefixP (CommandP c) (fromJust mp)
-      else return (CommandP c)
+    return (CommandP c)
+
+{-mp <- optionMaybe prefixcompose
+if isJust mp
+  then return $ PrefixP (CommandP c) (fromJust mp)
+  else return (CommandP c)-}
 
 prefixA =
   do
