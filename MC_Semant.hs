@@ -135,7 +135,7 @@ firstLower = isLower . head
 
 addProcDef rho procName =
   if procName `elem` pid rho
-    then error $ "Process " ++ procName ++ " already defined defined"
+    then error $ "Process " ++ procName ++ " already defined"
     else rho {pid = pid rho ++ [procName]}
 
 tau = ActionP $ Action "tau"
@@ -227,7 +227,8 @@ semantCheck rho (ProcDef name p) =
        in Right rho'
     Cst s ->
       let p' = parToCstProc rho p
-       in Right $ rho {prog = prog rho ++ [ProcDef name p']}
+          rho' = addProcDef rho s
+       in Right $ rho' {prog = prog rho ++ [ProcDef name p']}
 semantCheck rho (SetDef name l) =
   if isJust $ Map.lookup name $setid rho
     then Left $ "Definition " ++ name ++ " already used"
@@ -266,10 +267,19 @@ varIProc rho name li =
     then
       let procName = map Data.Char.toUpper name
           chanName = map Data.Char.toLower name
+          rho' = addProcDef rho procName
           wp = ProcDef (Cst procName) $ writingProc procName chanName li
           varp = variableProc procName chanName li []
-       in rho {prog = prog rho ++ [wp] ++ varp}
+          rho'' = addProcDefs rho' varp
+       in --inserire nomi di processi delle variabili
+          rho'' {prog = prog rho ++ [wp] ++ varp}
     else rho
+
+addProcDefs rho varp =
+  case varp of
+    [] -> rho
+    (ProcDef (Cst procName) _ : xs) -> addProcDefs (addProcDef rho procName) xs
+    _ -> error "Not valid process description"
 
 variableProc procName chanName li lp =
   {-case li of
@@ -288,7 +298,7 @@ variableProcAus procName chanName li lp prec precName =
   case li of
     [] -> lp
     [x] ->
-      let procName1 = procName ++ map Data.Char.toUpper (show x)
+      let procName1 = procName ++ "-" ++ map Data.Char.toUpper (show x)
           outputchan = chanName ++ "r" ++ map Data.Char.toLower (show x)
           procread = PrefixP (cact outputchan) (ProcVar $ Cst procName1)
           procwrite = ProcVar $ Cst procName
@@ -306,7 +316,7 @@ variableProcAus procName chanName li lp prec precName =
           lp' = lp ++ [ProcDef (Cst procName1) procBody]
        in lp'
     (x : y : xs) ->
-      let procName1 = procName ++ map Data.Char.toUpper (show x)
+      let procName1 = procName ++ "-" ++ map Data.Char.toUpper (show x)
           outputchan = chanName ++ "r" ++ map Data.Char.toLower (show x)
           procread = PrefixP (cact outputchan) (ProcVar $ Cst procName1)
           procwrite = ProcVar $ Cst procName
@@ -319,7 +329,7 @@ variableProcAus procName chanName li lp prec precName =
               else Nothing
           incaction =
             let actName = chanName ++ "Inc"
-                nextName = procName ++ map Data.Char.toUpper (show y)
+                nextName = procName ++ "-" ++ map Data.Char.toUpper (show y)
              in PrefixP (act actName) (ProcVar $ Cst nextName)
           procBody =
             if isJust decaction
@@ -331,12 +341,12 @@ variableProcAus procName chanName li lp prec precName =
 writingProc procName chanName li =
   case li of
     [x] ->
-      let procDest = procName ++ map Data.Char.toUpper (show x)
+      let procDest = procName ++ "-" ++ map Data.Char.toUpper (show x)
           inputchan = chanName ++ "w" ++ map Data.Char.toLower (show x)
           procwrite = PrefixP (act inputchan) (ProcVar $ Cst procDest)
        in procwrite
     (x : xs) ->
-      let procDest = procName ++ map Data.Char.toUpper (show x)
+      let procDest = procName ++ "-" ++ map Data.Char.toUpper (show x)
           inputchan = chanName ++ "w" ++ map Data.Char.toLower (show x)
           procwrite = PrefixP (act inputchan) (ProcVar $ Cst procDest)
        in NonDetChoise procwrite (writingProc procName chanName xs)
@@ -351,6 +361,7 @@ varBProc rho name v' =
             1 ->
               let procName1 = procName
                   procName2 = procName ++ map Data.Char.toUpper (show $ head v')
+                  rho' = foldl addProcDef rho [procName1, procName2]
                   inputname = chanName ++ "w" ++ map Data.Char.toLower (show $ head v')
                   outputname = chanName ++ "r" ++ map Data.Char.toLower (show $ head v')
                   procBody1 = PrefixP (act inputname) (ProcVar $ Cst procName2)
@@ -359,11 +370,12 @@ varBProc rho name v' =
                       (PrefixP (cact outputname) (ProcVar $ Cst procName2))
                       (ProcVar $ Cst procName1)
                   progExt = [ProcDef (Cst procName1) procBody1, ProcDef (Cst procName2) procBody2]
-               in rho {pid = pid rho ++ [procName1, procName2], prog = prog rho ++ progExt}
+               in rho' {prog = prog rho ++ progExt}
             2 ->
               let procName1 = procName
                   procName2 = procName ++ "TRUE"
                   procName3 = procName ++ "FALSE"
+                  rho' = foldl addProcDef rho [procName1, procName2, procName3]
                   inputname2 = chanName ++ "wtrue"
                   inputname3 = chanName ++ "wfalse"
                   outputname2 = chanName ++ "rtrue"
@@ -381,7 +393,7 @@ varBProc rho name v' =
                       (PrefixP (cact outputname3) (ProcVar $ Cst procName3))
                       (ProcVar $ Cst procName1)
                   progExt = [ProcDef (Cst procName1) procBody1, ProcDef (Cst procName2) procBody2, ProcDef (Cst procName3) procBody3]
-               in rho {pid = pid rho ++ [procName1, procName2, procName3], prog = prog rho ++ progExt}
+               in rho' {prog = prog rho ++ progExt}
             _ -> error "Variable cannot be instatiated"
     else error "The first letter of a boolean variable name must be lower case."
 
@@ -651,12 +663,19 @@ expandRest rho slist =
 translateProcAus rho p =
   case p of
     Nil -> (rho, Nil)
-    ProcVar pn -> (rho, ProcVar pn)
-    ActionP a -> (rho, ActionP a)
+    ProcVar (Cst pn) ->
+      if pn `elem` pid rho
+        then (rho, p)
+        else error $ "Process " ++ pn ++ " not defined"
+    --ActionP a -> (rho, ActionP a)
     CommandP c ->
       let nn = newname $ counter rho
           rho' = translateCom rho {counter = counter rho + 1} (Cst nn) c
        in (rho', ProcVar $ Cst nn)
+    PrefixP (ActionP a) p2 ->
+      let (rho', proc1) = (rho, ActionP a)
+          (rho'', proc2) = translateProcAus rho' p2
+       in (rho'', PrefixP proc1 proc2)
     PrefixP p1 p2 ->
       let (rho', proc1) = translateProcAus rho p1
           (rho'', proc2) = translateProcAus rho' p2
@@ -664,8 +683,7 @@ translateProcAus rho p =
     Restriction p1 slist ->
       let (rho', proc1) = translateProcAus rho p1
           slist' = expandRest rho slist
-       in --TODO expand list of restrictions
-          (rho', Restriction proc1 slist')
+       in (rho', Restriction proc1 slist')
     Relabelling p1 slist ->
       let (rho', proc1) = translateProcAus rho p1
        in (rho', Relabelling proc1 slist)
@@ -677,6 +695,7 @@ translateProcAus rho p =
       let (rho', proc1) = translateProcAus rho p1
           (rho'', proc2) = translateProcAus rho' p2
        in (rho'', ParallelComp proc1 proc2)
+    _ -> error "Invalid semantic, process must end with nil/0 or process variable"
 
 {-translateProc rho name p =
   case p of

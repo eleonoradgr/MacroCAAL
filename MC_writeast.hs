@@ -38,7 +38,10 @@ procToStingAus p s paren =
                in if paren then "( " ++ sres ++ " )" else sres
     Restriction p slist ->
       let ps = procToStingAus p [] True
-          sres = ps ++ "\\{ " ++ List.intercalate ", " slist ++ "}"
+          sres =
+            if length slist > 1
+              then ps ++ "\\{ " ++ List.intercalate ", " slist ++ "}"
+              else ps ++ "\\" ++ head slist
        in if paren then "( " ++ sres ++ " )" else sres
     Relabelling p rellist ->
       let ps = procToStingAus p [] True
@@ -69,6 +72,10 @@ procToString p =
 procDefToString (ProcDef (Cst name) p) =
   let nameString = name ++ " = "
       procString = procToString p
+   in nameString ++ procString ++ ";"
+procDefToString (SetDef name elem) =
+  let nameString = "set " ++ name ++ " = "
+      procString = "{ " ++ List.intercalate ", " elem ++ "}"
    in nameString ++ procString ++ ";"
 
 astToCCS procList =
