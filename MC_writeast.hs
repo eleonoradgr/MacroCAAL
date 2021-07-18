@@ -8,6 +8,7 @@ import qualified Data.Map as Map
 import MC_Parser
 import MC_Semant
 import System.Environment
+import System.FilePath
 
 procToStingAus p s paren =
   case p of
@@ -39,7 +40,7 @@ procToStingAus p s paren =
     Restriction p slist ->
       let ps = procToStingAus p [] True
           sres =
-            if length slist > 1
+            if length slist > 1 || firstLower (head slist)
               then ps ++ "\\{ " ++ List.intercalate ", " slist ++ "}"
               else ps ++ "\\" ++ head slist
        in if paren then "( " ++ sres ++ " )" else sres
@@ -77,6 +78,7 @@ procDefToString (SetDef name elem) =
   let nameString = "set " ++ name ++ " = "
       procString = "{ " ++ List.intercalate ", " elem ++ "}"
    in nameString ++ procString ++ ";"
+procDefToString _ = "Invalid CAAL syntax"
 
 astToCCS procList =
   let s = map procDefToString procList
@@ -91,8 +93,6 @@ main = do
   let res2 = valuePassing res1
   let res3 = foldl translate (res2 {prog = []}) $ prog res2
   let p = astToCCS $ prog res3
-  writeFile ("CCS" ++ filename) p
+  let (dir, filename') = splitFileName filename
+  writeFile (dir ++ "CCS" ++ filename') p
   print res2
-
---print res2
---print p
