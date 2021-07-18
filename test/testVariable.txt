@@ -1,0 +1,8 @@
+def N<=3;
+def M < 5 8;
+def b2=[true,false];
+def k=[1,2];
+def i <= 5;
+def j < 8;
+def h <= -2 10;
+def m < -7;

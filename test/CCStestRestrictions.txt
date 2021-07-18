@@ -1,0 +1,9 @@
+C = cw0 .C-0  + cw1 .C-1  + cw2 .C-2  + cw3 .C-3 ;
+C-0 = 'cr0 .C-0  + C  + cInc .C-1 ;
+C-1 = 'cr1 .C-1  + C  + cInc .C-2  + cDec .C-0 ;
+C-2 = 'cr2 .C-2  + C  + cInc .C-3  + cDec .C-1 ;
+C-3 = 'cr3 .C-3  + C  + cDec .C-2 ;
+B = 0 ;
+A = ( a .b .0  | B  )\{ cr0, cw0, cr1, cw1, cr2, cw2, cr3, cw3, c, cInc, cDec};
+set L = { cr0, cw0, cr1, cw1, cr2, cw2, cr3, cw3, c, cInc, cDec};
+A1 = ( a .b .0  | B  )\L;

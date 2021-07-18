@@ -1,0 +1,12 @@
+SKIP = skip;
+def x <= 3;
+ASSINGINT = x:=3;
+def b = [true, false];
+ASSIGNBOOL =  b := true;
+
+IF = if (x == 3 && b) then {x :=2} else {skip};
+WHILE =  while (! x== 0) do {dec x};
+INC = inc x;
+DEC = dec x;
+
+SEC = inc x,  if (x == 3 && b) then {x :=2} else {skip}, b:=false;
