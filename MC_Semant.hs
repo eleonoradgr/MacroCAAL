@@ -233,7 +233,8 @@ semantCheck rho (SetDef name l) =
   if isJust $ Map.lookup name $setid rho
     then Left $ "Definition " ++ name ++ " already used"
     else
-      let rho' = rho {setid = Map.insert name l $ setid rho, prog = prog rho ++ [SetDef name l]}
+      let slist' = expandRest rho l
+          rho' = rho {setid = Map.insert name l $ setid rho, prog = prog rho ++ [SetDef name slist']}
        in Right rho'
 semantCheck rho (VarDef name v) =
   case v of

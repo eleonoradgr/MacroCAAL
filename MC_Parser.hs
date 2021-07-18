@@ -56,7 +56,7 @@ sumcompose =
 
 composition =
   do
-    p <- actionPrefix --choice [try prefixC, try prefixA, reProcess]
+    p <- actionPrefix
     mc <- optionMaybe parcompose
     if isJust mc
       then return $ ParallelComp p (fromJust mc)
@@ -74,13 +74,7 @@ actionPrefix =
 
 prefixC =
   do
-    c <- command
-    return (CommandP c)
-
-{-mp <- optionMaybe prefixcompose
-if isJust mp
-  then return $ PrefixP (CommandP c) (fromJust mp)
-  else return (CommandP c)-}
+    CommandP <$> command
 
 prefixA =
   do
@@ -103,7 +97,7 @@ output =
   do
     reservedOp "'"
     name <- identifier
-    mess <- optionMaybe $ angles $ choice [identifier, string "0"]
+    mess <- optionMaybe $ angles $ choice [identifier, number, string "0"]
     if isJust mess
       then return $ Output name (fromJust mess)
       else return $ Coaction name

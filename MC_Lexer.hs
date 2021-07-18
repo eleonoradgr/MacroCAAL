@@ -54,7 +54,7 @@ languageDef =
           "||",
           "!",
           "inc",
-          "decs"
+          "dec"
         ],
       Token.caseSensitive = True
     }
@@ -67,6 +67,14 @@ procIdentifier = do
   whiteSpace
   x <- Token.lexeme lexer upper
   xs <- optionMaybe $ many (Token.lexeme lexer alphaNum)
+  if isJust xs
+    then return (x : fromJust xs)
+    else return [x]
+
+number = do
+  whiteSpace
+  x <- Token.lexeme lexer digit
+  xs <- optionMaybe $ many (Token.lexeme lexer digit)
   if isJust xs
     then return (x : fromJust xs)
     else return [x]
