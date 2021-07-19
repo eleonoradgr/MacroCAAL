@@ -56,7 +56,7 @@ sumcompose =
 
 composition =
   do
-    p <- actionPrefix
+    p <- action
     mc <- optionMaybe parcompose
     if isJust mc
       then return $ ParallelComp p (fromJust mc)
@@ -67,7 +67,7 @@ parcompose =
     reservedOp "|"
     composition
 
-actionPrefix =
+action =
   try prefixC
     <|> try prefixA
     <|> try reProcess
@@ -78,7 +78,7 @@ prefixC =
 
 prefixA =
   do
-    a <- action
+    a <- actionPrefix
     mp <- optionMaybe prefixcompose
     if isJust mp
       then return $ PrefixP (ActionP a) (fromJust mp)
@@ -87,9 +87,9 @@ prefixA =
 prefixcompose =
   do
     reservedOp "."
-    actionPrefix
+    action
 
-action =
+actionPrefix =
   try output
     <|> input
 

@@ -13,38 +13,55 @@ import qualified Data.Set as Set
 import MC_Parser
 
 data Rho = Rho
-  { pid :: [String],
+  { -- | List of process names
+    pid :: [String],
+    -- | List of set variables identifiers with associated values
     setid :: Map String [String],
+    -- | List of int variables identifiers with related values
     defIid :: Map String [Integer],
+    -- | List of bool variables identifiers with related values
     defBid :: Map String [Bool],
+    -- | Ast of the program
     prog :: [Stmt],
+    -- | Counter for generation of new process names
     counter :: Int
   }
   deriving (Show)
 
+-- | Given rho and a variable name
+--  returns the possible values for the variable
+getIntVar :: Rho -> String -> [Integer]
 getIntVar rho name =
   case Map.lookup name $ defIid rho of
     Just x -> x
     Nothing -> error $ "Variable " ++ name ++ " undefined"
 
+-- | Return True if name is an int variable, False ow
+isIntVarDef :: Rho -> String -> Bool
 isIntVarDef rho name =
   case Map.lookup name $ defIid rho of
     Just x -> True
     Nothing -> False
 
+-- | Given rho and a variable name
+--  returns the possible values for the variable
+getBoolVar :: Rho -> String -> [Bool]
 getBoolVar rho name =
   case Map.lookup name $ defBid rho of
     Just x -> x
     Nothing -> error $ "Variable " ++ name ++ " undefined"
 
+-- | Return True if name is a bool variable, False ow
+isBoolVarDef :: Rho -> String -> Bool
 isBoolVarDef rho name =
   case Map.lookup name $ defBid rho of
     Just x -> True
     Nothing -> False
 
-newtype Counter = Counter {x :: IORef Int}
-
-{- Expression evaluation for process parameters -}
+-- | Expression evaluation, used for parametric processes
+-- also the list of variable used in the evaluation is returned
+-- if a variable occurs the fist of the list of admissible values is used
+evalAExpr :: Rho -> AExpr -> [String] -> (Integer, [String])
 evalAExpr rho (Int val) usedVar = (val, usedVar)
 evalAExpr rho (Neg expr) usedVar =
   let (e, uvar) = evalAExpr rho expr usedVar
@@ -62,6 +79,8 @@ evalAExpr rho (BinOp op expr1 expr2) usedVar =
                 Sub -> (e1 - e2, names)
                 Mul -> (e1 * e2, names)
 
+-- | Constant arithmetic expression evaluation, used for assignment command
+evalCstAExpr :: AExpr -> Integer
 evalCstAExpr (Int val) = val
 evalCstAExpr (Neg expr) = negate e
   where
@@ -77,6 +96,8 @@ evalCstAExpr (BinOp op expr1 expr2) =
 evalCstAExpr _ =
   error "Non constant evaluation"
 
+-- | Constant boolean expression evaluation, used for assignment command
+evalCstBExpr :: BExpr -> Bool
 evalCstBExpr T = True
 evalCstBExpr F = False
 evalCstBExpr (Not bexpr) =
@@ -104,50 +125,45 @@ evalCstBExpr (CmpOp cop expr1 expr2) =
 evalCstBExpr _ =
   error "Non constant evaluation"
 
-{-evalBExpr rho T usedVar = (True, usedVar)
-evalBExpr rho F usedVar = (False, usedVar)
-evalBExpr rho (Not expr) usedVar = let (b,n) = evalBExpr scope expr in
-                                    (not b, n)
-evalBExpr rho (BVar var) =
-    case Map.lookup name $ defBid rho of
-        Just x    -> (head x, uvar ++ [name])
-        Nothing   -> error $ "Variable " ++ var ++ " undefined"
-evalBExpr rho (BBinOp op exp1 exp2) =
-    let (e1,n1) = evalAExpr rho exp1 in
-    let (e2,n2) = evalAExpr rho exp2 in
-    let names = Set.toList . Set.fromList (n1 ++ n2) in
-      case op of
-          Add       -> (e1 + e2, names)
-          Sub       -> (e1 - e2, names)
-          Mul       -> (e1 * e2, names)
-    case op of
-        And -> evalBExpr scope exp1 && evalBExpr scope exp2
-        Or  -> evalBExpr scope exp1 || evalBExpr scope exp2
-evalBExpr rho (CmpOp op exp1 exp2) =
-    case op of
-        Less    -> evalAExpr scope exp1 <  evalAExpr scope exp2
-        Greater -> evalAExpr scope exp1 >  evalAExpr scope exp2
-        Equal   -> evalAExpr scope exp1 == evalAExpr scope exp2-}
-
+-- | Return True if the first char is upper case, False ow
+firstUpper :: [Char] -> Bool
 firstUpper = isUpper . head
 
+-- | Return True if the first char is lower case, False ow
+firstLower :: [Char] -> Bool
 firstLower = isLower . head
 
+-- | Add to pid a new process name
+addProcDef :: Rho -> String -> Rho
 addProcDef rho procName =
   if procName `elem` pid rho
     then error $ "Process " ++ procName ++ " already defined"
     else rho {pid = pid rho ++ [procName]}
 
+-- | Generate the silent action
+tau :: Proc
 tau = ActionP $ Action "tau"
 
+-- | Generate action
+act :: String -> Proc
 act name = ActionP $ Action name
 
+-- | Generate coaction
+cact :: String -> Proc
 cact name = ActionP $ Coaction name
 
+-- | Generate coaction done for commands
+doneCommand :: Proc
 doneCommand = PrefixP (cact "done") Nil
 
+-- | Generate a new name for processes
+newname :: Show a => a -> [Char]
 newname i = "PROG" ++ show i
 
+--------------------------------------------------------------------------------------
+
+-- | Tranform the occurrences of a parametric process into a constant one
+parToCstProc :: Rho -> Proc -> Proc
 parToCstProc rho p =
   case p of
     ProcVar (Param name expr) ->
@@ -174,6 +190,10 @@ parToCstProc rho p =
        in ParallelComp p1' p2'
     _ -> p
 
+-- | Tranform a parametric process definition into a constant one.
+--   A check on the number of variables used in the parameter is performed
+--   to guarantee that at most one variable is used
+parToCstProcdef :: Rho -> ProcName -> Proc -> Rho
 parToCstProcdef rho (Param name expr) p
   | length nu > 1 = error "Only one parameter can appear in process definition"
   | null nu =
@@ -196,7 +216,10 @@ parToCstProcdef rho (Param name expr) p
           else rho' {prog = prog'}
   where
     (ex, nu) = evalAExpr rho expr []
+parToCstProcdef rho _ p = rho
 
+-- | Generate the list of possible values for a range definitition
+evalRangeCmp :: (Ord a, Num a, Enum a) => CmpOp -> a -> a -> [a]
 evalRangeCmp co i1 i2 =
   case co of
     Lt ->
@@ -214,87 +237,45 @@ evalRangeCmp co i1 i2 =
     Eq -> error "Invalid relation operand for definition"
     Neq -> error "Invalid relation operand for definition"
 
+-- | Generate the list of possible values for a boolean range definitition
+evalRangeBool :: [BExpr] -> [Bool]
 evalRangeBool bl =
   let mapB x = case x of
         T -> True
         F -> False
+        _ -> evalCstBExpr x
    in Set.toList . Set.fromList $ map mapB bl
 
-semantCheck rho (ProcDef name p) =
-  case name of
-    Param s expr ->
-      let rho' = parToCstProcdef rho name p
-       in Right rho'
-    Cst s ->
-      let p' = parToCstProc rho p
-          rho' = addProcDef rho s
-       in Right $ rho' {prog = prog rho ++ [ProcDef name p']}
-semantCheck rho (SetDef name l) =
-  if isJust $ Map.lookup name $setid rho
-    then Left $ "Definition " ++ name ++ " already used"
-    else
-      let slist' = expandRest rho l
-          rho' = rho {setid = Map.insert name l $ setid rho, prog = prog rho ++ [SetDef name slist']}
-       in Right rho'
-semantCheck rho (VarDef name v) =
-  case v of
-    RangeCmp co i1 i2 ->
-      if isIntVarDef rho name
-        then Left $ "Variable " ++ name ++ " already defined"
-        else
-          ( let v' = evalRangeCmp co i1 i2
-                rho' = rho {defIid = Map.insert name v' $ defIid rho}
-                rho'' = varIProc rho' name v'
-             in Right rho''
-          )
-    Range il ->
-      if isIntVarDef rho name
-        then Left $ "Variable " ++ name ++ " already defined"
-        else
-          let rho' = rho {defIid = Map.insert name il $ defIid rho}
-              rho'' = varIProc rho' name il
-           in Right rho''
-    RangeBool bl ->
-      if isBoolVarDef rho name
-        then Left $ "Variable " ++ name ++ " already defined"
-        else
-          let v' = evalRangeBool bl
-           in let rho' = rho {defBid = Map.insert name v' $ defBid rho}
-                  rho'' = varBProc rho' name v'
-               in Right rho''
-
-varIProc rho name li =
-  if firstLower name
-    then
-      let procName = map Data.Char.toUpper name
-          chanName = map Data.Char.toLower name
-          rho' = addProcDef rho procName
-          wp = ProcDef (Cst procName) $ writingProc procName chanName li
-          varp = variableProc procName chanName li []
-          rho'' = addProcDefs rho' varp
-       in --inserire nomi di processi delle variabili
-          rho'' {prog = prog rho ++ [wp] ++ varp}
-    else rho
-
-addProcDefs rho varp =
-  case varp of
-    [] -> rho
-    (ProcDef (Cst procName) _ : xs) -> addProcDefs (addProcDef rho procName) xs
-    _ -> error "Not valid process description"
-
-variableProc procName chanName li lp =
-  {-case li of
-    [] -> lp
+-- | Generate the non-deterministic choice for all the values that can be written in a variable
+-- ProcName is the variable process name (e.g X),
+--          it is needed to create the destination process (e.g X-3)
+-- chanName is the variable name (e.g x) to create an action (e.g xw3)
+-- li is the list of possible values that the variable can assume
+writingProc :: Show a => [Char] -> [Char] -> [a] -> Proc
+writingProc procName chanName li =
+  case li of
+    [x] ->
+      let procDest = procName ++ "-" ++ map Data.Char.toUpper (show x)
+          inputchan = chanName ++ "w" ++ map Data.Char.toLower (show x)
+          procwrite = PrefixP (act inputchan) (ProcVar $ Cst procDest)
+       in procwrite
     (x : xs) ->
-      let procName1 = procName ++ map Data.Char.toUpper (show x)
-          outputchan = chanName ++ "r" ++ map Data.Char.toLower (show x)
-          procread = PrefixP (ActionP $ Coaction outputchan) (ProcVar $ Cst procName1)
-          procwrite = ProcVar $ Cst procName
-          procBody = NonDetChoise procread procwrite
-          lp' = lp ++ [ProcDef (Cst procName1) procBody]
-       in variableProc procName chanName xs lp'-}
-  variableProcAus procName chanName li lp False ""
+      let procDest = procName ++ "-" ++ map Data.Char.toUpper (show x)
+          inputchan = chanName ++ "w" ++ map Data.Char.toLower (show x)
+          procwrite = PrefixP (act inputchan) (ProcVar $ Cst procDest)
+       in NonDetChoise procwrite (writingProc procName chanName xs)
+    _ -> error "e"
 
+-- | Generate the processes needed to treat variables as value servers.
+-- ProcName is the variable process name (e.g X),
+--          it is needed to create the destination process (e.g X-3)
+-- chanName is the variable name (e.g x) to create an action (e.g xw3, 'xr3)
+-- li is the list of possible values that the variable can assume
+-- lp is the accumulator with processes generated
+-- prec is a boolean value, True if the variable has a predecessor value
+--      and a dec action can be performed, False ow
+-- precName process destination in case of decrement
+variableProcAus :: Show a => [Char] -> [Char] -> [a] -> [Stmt] -> Bool -> [Char] -> [Stmt]
 variableProcAus procName chanName li lp prec precName =
   case li of
     [] -> lp
@@ -339,20 +320,39 @@ variableProcAus procName chanName li lp prec precName =
           lp' = lp ++ [ProcDef (Cst procName1) procBody]
        in variableProcAus procName chanName (y : xs) lp' True procName1
 
-writingProc procName chanName li =
-  case li of
-    [x] ->
-      let procDest = procName ++ "-" ++ map Data.Char.toUpper (show x)
-          inputchan = chanName ++ "w" ++ map Data.Char.toLower (show x)
-          procwrite = PrefixP (act inputchan) (ProcVar $ Cst procDest)
-       in procwrite
-    (x : xs) ->
-      let procDest = procName ++ "-" ++ map Data.Char.toUpper (show x)
-          inputchan = chanName ++ "w" ++ map Data.Char.toLower (show x)
-          procwrite = PrefixP (act inputchan) (ProcVar $ Cst procDest)
-       in NonDetChoise procwrite (writingProc procName chanName xs)
-    _ -> error "e"
+-- | Generate the processes needed to treat variables as value servers.
+-- ProcName is the variable process name (e.g X),
+--          it is needed to create the destination process (e.g X-3)
+-- chanName is the variable name (e.g x) to create an action (e.g xw3, 'xr3)
+-- li is the list of possible values that the variable can assume
+variableProc :: Show a => [Char] -> [Char] -> [a] -> [Stmt]
+variableProc procName chanName li =
+  variableProcAus procName chanName li [] False ""
 
+-- | Add to pid the names of new processes, created for a variable management
+addProcDefs :: Rho -> [Stmt] -> Rho
+addProcDefs rho varp =
+  case varp of
+    [] -> rho
+    (ProcDef (Cst procName) _ : xs) -> addProcDefs (addProcDef rho procName) xs
+    _ -> error "Not valid process description"
+
+-- | Generate processes for an integer variable
+varIProc :: Show a => Rho -> [Char] -> [a] -> Rho
+varIProc rho name li =
+  if firstLower name
+    then
+      let procName = map Data.Char.toUpper name
+          chanName = map Data.Char.toLower name
+          rho' = addProcDef rho procName
+          wp = ProcDef (Cst procName) $ writingProc procName chanName li
+          varp = variableProc procName chanName li
+          rho'' = addProcDefs rho' varp
+       in rho'' {prog = prog rho ++ [wp] ++ varp}
+    else rho
+
+-- | Generate processes for an boolean variable
+varBProc :: Show a => Rho -> [Char] -> [a] -> Rho
 varBProc rho name v' =
   if firstLower name
     then
@@ -398,11 +398,51 @@ varBProc rho name v' =
             _ -> error "Variable cannot be instatiated"
     else error "The first letter of a boolean variable name must be lower case."
 
-testSeman rho def =
-  case semantCheck rho def of
-    Left e -> error $ show e
-    Right r -> r
+-- | Function for tranlation of a parametric process and variable definition
+parVarTranslate rho (ProcDef name p) =
+  case name of
+    Param s expr -> parToCstProcdef rho name p
+    Cst s ->
+      let p' = parToCstProc rho p
+          rho' = addProcDef rho s
+       in rho' {prog = prog rho ++ [ProcDef name p']}
+parVarTranslate rho (SetDef name l) =
+  if isJust $ Map.lookup name $setid rho
+    then error $ "Definition " ++ name ++ " already used"
+    else
+      let slist' = expandRest rho l
+       in rho {setid = Map.insert name l $ setid rho, prog = prog rho ++ [SetDef name slist']}
+parVarTranslate rho (VarDef name v) =
+  case v of
+    RangeCmp co i1 i2 ->
+      if isIntVarDef rho name
+        then error $ "Variable " ++ name ++ " already defined"
+        else
+          ( let v' = evalRangeCmp co i1 i2
+                rho' = rho {defIid = Map.insert name v' $ defIid rho}
+             in varIProc rho' name v'
+          )
+    Range il ->
+      if isIntVarDef rho name
+        then error $ "Variable " ++ name ++ " already defined"
+        else
+          let rho' = rho {defIid = Map.insert name il $ defIid rho}
+           in varIProc rho' name il
+    RangeBool bl ->
+      if isBoolVarDef rho name
+        then error $ "Variable " ++ name ++ " already defined"
+        else
+          let v' = evalRangeBool bl
+           in let rho' = rho {defBid = Map.insert name v' $ defBid rho}
+               in varBProc rho' name v'
 
+firstStep rho text =
+  foldl parVarTranslate rho text
+
+--------------------------------------------------------------------------------------
+
+-- | Given the variable v and its value val, substitute the output if it contains the variable.
+outputSubs :: String -> [Char] -> Proc -> Proc
 outputSubs var val p =
   case p of
     ActionP (Output varout par) -> if par == var then cact $ varout ++ val else p
@@ -426,61 +466,85 @@ outputSubs var val p =
        in ParallelComp p1' p2'
     _ -> p
 
-inputPropagation var list cont =
-  case cont of
-    Nothing -> case length list of
-      1 -> act $ var ++ show (head list)
-      n -> NonDetChoise (act $ var ++ show (head list)) (inputPropagation var (tail list) Nothing)
-    Just p ->
-      case length list of
-        1 ->
-          let a = act $ var ++ show (head list)
-           in PrefixP a $ outputSubs var (show (head list)) p
-        n ->
-          let a = act $ var ++ show (head list)
-              p' = PrefixP a $ outputSubs var (show (head list)) p
-           in NonDetChoise p' $ inputPropagation var (tail list) cont
+-- | Given the variable v and its possible values list,
+--   create a non deterministic choice for all the possible inputs,
+--   and ptopagate them where the parameter par is used.
+inputPropagation :: Show a => [Char] -> String -> [a] -> Proc -> Proc
+inputPropagation var par list cont =
+  case length list of
+    1 ->
+      let a = act $ var ++ show (head list)
+       in PrefixP a $ outputSubs par (show (head list)) cont
+    n ->
+      let a = act $ var ++ show (head list)
+          p' = PrefixP a $ outputSubs par (show (head list)) cont
+       in NonDetChoise p' $ inputPropagation var par (tail list) cont
 
-inputFinder rho p =
+-- | Given the variable v and its possible values list,
+--   create a non deterministic choice for all the possible outputs,
+outputPropagation :: Show a => [Char] -> [a] -> Proc -> Proc
+outputPropagation var list cont =
+  case length list of
+    1 ->
+      let a = cact $ var ++ show (head list)
+       in PrefixP a cont
+    n ->
+      let a = cact $ var ++ show (head list)
+          p' = PrefixP a cont
+       in NonDetChoise p' $ outputPropagation var (tail list) cont
+
+-- | Translate input and output operation
+ioFinder :: Rho -> Proc -> Proc
+ioFinder rho p =
   case p of
-    ActionP (Input var par) ->
-      let listval = getIntVar rho par
-       in inputPropagation par listval Nothing
     PrefixP (ActionP (Input var par)) p2 ->
       let listval = getIntVar rho par
-          newproc = inputPropagation par listval $ Just p2
-       in inputFinder rho newproc
+          newproc = inputPropagation var par listval p2
+       in ioFinder rho newproc
+    PrefixP (ActionP (Output var par)) p2 ->
+      let listval =
+            if isIntVarDef rho par
+              then getIntVar rho par
+              else [read par]
+          newproc = outputPropagation var listval p2
+       in ioFinder rho newproc
     PrefixP p1 p2 ->
-      let p1' = inputFinder rho p1
-          p2' = inputFinder rho p2
+      let p1' = ioFinder rho p1
+          p2' = ioFinder rho p2
        in PrefixP p1' p2'
     Restriction p slist ->
-      let p' = inputFinder rho p
+      let p' = ioFinder rho p
        in Restriction p' slist
     Relabelling p rellist ->
-      let p' = inputFinder rho p
+      let p' = ioFinder rho p
        in Relabelling p' rellist
     NonDetChoise p1 p2 ->
-      let p1' = inputFinder rho p1
-          p2' = inputFinder rho p2
+      let p1' = ioFinder rho p1
+          p2' = ioFinder rho p2
        in NonDetChoise p1' p2'
     ParallelComp p1 p2 ->
-      let p1' = inputFinder rho p1
-          p2' = inputFinder rho p2
+      let p1' = ioFinder rho p1
+          p2' = ioFinder rho p2
        in ParallelComp p1' p2'
     _ -> p
 
+-- | Translate input and output actions
+valuePassingAus :: Rho -> Stmt -> Rho
 valuePassingAus rho (ProcDef name p) =
-  let p' = inputFinder rho p
+  let p' = ioFinder rho p
    in rho {prog = prog rho ++ [ProcDef name p']}
 valuePassingAus rho (SetDef name l) =
   rho {prog = prog rho ++ [SetDef name l]}
 valuePassingAus rho (VarDef name v) =
   rho {prog = prog rho ++ [VarDef name v]}
 
-valuePassing rho =
+secondStep rho =
   foldl valuePassingAus (rho {prog = []}) $ prog rho
 
+--------------------------------------------------------------------------------------
+
+-- | Translate assignement for a integer variable
+assAexpreval :: Rho -> [Char] -> AExpr -> [Char]
 assAexpreval rho v e =
   let e' = evalCstAExpr e
       eRange = getIntVar rho v
@@ -489,6 +553,8 @@ assAexpreval rho v e =
         then action
         else error $ "invalid value for " ++ v
 
+-- | Translate assignement for a boolean variable
+assBexpreval :: Rho -> [Char] -> BExpr -> [Char]
 assBexpreval rho v be =
   let be' = evalCstBExpr be
       beRange = getBoolVar rho v
@@ -497,6 +563,8 @@ assBexpreval rho v be =
         then action
         else error $ "invalid value for " ++ v
 
+-- | Generate a non deterministic choice for a list of process
+genNonDetChoice :: [Proc] -> Proc
 genNonDetChoice proclist =
   case proclist of
     [x] -> x
@@ -504,6 +572,22 @@ genNonDetChoice proclist =
     (x : xs) -> NonDetChoise x $ genNonDetChoice xs
     _ -> error "Impossible generation of non deterministic choice "
 
+-- | guardgen generates while and if guard.
+guardgen ::
+  -- | the environment
+  Rho ->
+  -- | guard
+  BExpr ->
+  -- | the process to execute in case of a true guard
+  Proc ->
+  -- | the process to execute in case of a false guard
+  Proc ->
+  -- | the boolean value is True if the boolean expression to translate
+  --   is the second element of a binary operation, and so encapsulate it in a PrefixAction.
+  --   If it is the first element only the action name is needed, indeed it will be
+  --   extended with futher action by the second part of the boolean expression.
+  Bool ->
+  ([Proc], [Proc])
 guardgen rho T trueAct falseAct isSecond
   | isSecond = ([PrefixP tau trueAct], [])
   | otherwise = ([tau], [])
@@ -553,7 +637,20 @@ guardgen rho (BBinOp Or b1 b2) trueAct falseAct isSecond =
    in (sndT ++ newFst, newSnd)
 guardgen rho _ _ _ _ = error "Not implemented yet"
 
-concateval rho nameProc c procListname lastCommand restrictions i =
+-- | Translation of a command
+concateval ::
+  -- | the environment
+  Rho ->
+  -- | name of the process associated to the command
+  [Char] ->
+  -- | command to transalte
+  Command ->
+  -- | List of new process generated
+  [[Char]] ->
+  -- | Last process element to insert after the cuttent command
+  Proc ->
+  (Rho, [[Char]])
+concateval rho nameProc c procListname lastCommand =
   case c of
     Concat c1 c2 ->
       case c1 of
@@ -561,47 +658,47 @@ concateval rho nameProc c procListname lastCommand restrictions i =
           let nn = newname $ counter rho
               proc = ProcDef (Cst nameProc) (PrefixP tau (ProcVar $ Cst nn))
               rho' = rho {prog = prog rho ++ [proc], counter = counter rho + 1}
-           in concateval rho' nn c2 (procListname ++ [nameProc]) lastCommand restrictions (i + 1)
+           in concateval rho' nn c2 (procListname ++ [nameProc]) lastCommand
         VarIAssign v e ->
           let nn = newname $ counter rho
               action = assAexpreval rho v e
               proc = ProcDef (Cst nameProc) $ PrefixP (cact action) (ProcVar $ Cst nn)
               rho' = rho {prog = prog rho ++ [proc], counter = counter rho + 1}
-           in concateval rho' nn c2 (procListname ++ [nameProc]) lastCommand restrictions (i + 1)
+           in concateval rho' nn c2 (procListname ++ [nameProc]) lastCommand
         VarBAssign v be ->
           let nn = newname $ counter rho
               action = assBexpreval rho v be
               proc = ProcDef (Cst nameProc) $ PrefixP (cact action) (ProcVar $ Cst nn)
               rho' = rho {prog = prog rho ++ [proc], counter = counter rho + 1}
-           in concateval rho' nn c2 (procListname ++ [nameProc]) lastCommand restrictions (i + 1)
+           in concateval rho' nn c2 (procListname ++ [nameProc]) lastCommand
         Inc v ->
           let nn = newname $ counter rho
               incact = cact $ v ++ "Inc"
               proc = ProcDef (Cst nameProc) (PrefixP incact (ProcVar $ Cst nn))
               rho' = rho {prog = prog rho ++ [proc], counter = counter rho + 1}
-           in concateval rho' nn c2 (procListname ++ [nameProc]) lastCommand restrictions (i + 1)
+           in concateval rho' nn c2 (procListname ++ [nameProc]) lastCommand
         Dec v ->
           let nn = newname $ counter rho
               decact = cact $ v ++ "Dec"
               proc = ProcDef (Cst nameProc) (PrefixP decact (ProcVar $ Cst nn))
               rho' = rho {prog = prog rho ++ [proc], counter = counter rho + 1}
-           in concateval rho' nn c2 (procListname ++ [nameProc]) lastCommand restrictions (i + 1)
+           in concateval rho' nn c2 (procListname ++ [nameProc]) lastCommand
         If b cthen celse ->
           let nn = newname $ counter rho
               nn1 = newname $ counter rho + 1
               nn2 = newname $ counter rho + 2
               (tAct, fAct) = guardgen rho b (ProcVar (Cst nn1)) (ProcVar (Cst nn2)) True
               proc = ProcDef (Cst nameProc) $ genNonDetChoice $ tAct ++ fAct
-              (rho1, procname1) = concateval rho {prog = prog rho ++ [proc], counter = counter rho + 3} nn1 cthen [] (ProcVar (Cst nn)) [] (i + 3)
-              (rho2, procname2) = concateval rho1 nn2 celse [] (ProcVar (Cst nn)) [] (i + 4)
-           in concateval rho2 nn c2 (procListname ++ [nameProc] ++ procname1 ++ procname2) lastCommand restrictions (i + 3)
+              (rho1, procname1) = concateval rho {prog = prog rho ++ [proc], counter = counter rho + 3} nn1 cthen [] (ProcVar (Cst nn))
+              (rho2, procname2) = concateval rho1 nn2 celse [] (ProcVar (Cst nn))
+           in concateval rho2 nn c2 (procListname ++ [nameProc] ++ procname1 ++ procname2) lastCommand
         While b doc ->
           let nn1 = newname $ counter rho
               nn2 = newname $ counter rho + 1
               (tAct, fAct) = guardgen rho b (ProcVar (Cst nn1)) (ProcVar (Cst nn2)) True
               proc = ProcDef (Cst nameProc) $ genNonDetChoice $ tAct ++ fAct
-              (rho1, procname1) = concateval rho {prog = prog rho ++ [proc], counter = counter rho + 3} nn1 doc [] (ProcVar (Cst nameProc)) [] (i + 3)
-           in concateval rho1 nn2 c2 (procListname ++ [nameProc] ++ procname1) lastCommand restrictions (i + 2)
+              (rho1, procname1) = concateval rho {prog = prog rho ++ [proc], counter = counter rho + 3} nn1 doc [] (ProcVar (Cst nameProc))
+           in concateval rho1 nn2 c2 (procListname ++ [nameProc] ++ procname1) lastCommand
         _ -> error "Not implemented yet"
     Skip -> (rho {prog = prog rho ++ [ProcDef (Cst nameProc) $ PrefixP tau lastCommand]}, procListname ++ [nameProc])
     VarIAssign v e ->
@@ -626,30 +723,35 @@ concateval rho nameProc c procListname lastCommand restrictions i =
           nn2 = newname $ counter rho + 2
           (tAct, fAct) = guardgen rho b (ProcVar (Cst nn1)) (ProcVar (Cst nn2)) True
           proc = ProcDef (Cst nameProc) $ genNonDetChoice $ tAct ++ fAct
-          (rho1, proc1) = concateval rho {prog = prog rho ++ [proc], counter = counter rho + 3} nn1 cthen [] lastCommand [] (i + 3)
-          (rho2, proc2) = concateval rho1 nn2 celse [] lastCommand [] (i + 4) --translateCom rho (Cst nn2) celse
+          (rho1, proc1) = concateval rho {prog = prog rho ++ [proc], counter = counter rho + 3} nn1 cthen [] lastCommand
+          (rho2, proc2) = concateval rho1 nn2 celse [] lastCommand
        in (rho2, procListname ++ [nameProc, nn1, nn2])
     While b doc ->
       let nn1 = newname $ counter rho
           nn2 = newname $ counter rho + 1
           (tAct, fAct) = guardgen rho b (ProcVar (Cst nn1)) doneCommand True
           proc = ProcDef (Cst nameProc) $ genNonDetChoice $ tAct ++ fAct
-          (rho1, procname1) = concateval rho {prog = prog rho ++ [proc], counter = counter rho + 3} nn1 doc [] (ProcVar (Cst nameProc)) [] (i + 3)
+          (rho1, procname1) = concateval rho {prog = prog rho ++ [proc], counter = counter rho + 3} nn1 doc [] (ProcVar (Cst nameProc))
        in (rho1, procListname ++ [nameProc] ++ procname1)
 
+-- | For each command c a new process with name name is created
+translateCom :: Rho -> ProcName -> Command -> Rho
 translateCom rho name c =
   case name of
     Cst s ->
-      let (rho', procListName) = concateval rho s c [] doneCommand [] 0
+      let (rho', procListName) = concateval rho s c [] doneCommand
        in rho'
     _ -> error "Only constant Process can be translated"
 
 generateChannels a values acc =
   case values of
     [] -> acc ++ [a, a ++ "Inc", a ++ "Dec"]
-    [x] -> generateChannels a [] $ acc ++ [a ++ "r" ++ (show x)] ++ [a ++ "w" ++ (show x)]
-    (x : xs) -> generateChannels a xs $ acc ++ [a ++ "r" ++ (show x)] ++ [a ++ "w" ++ (show x)]
+    [x] -> generateChannels a [] $ acc ++ [a ++ "r" ++ show x] ++ [a ++ "w" ++ show x]
+    (x : xs) -> generateChannels a xs $ acc ++ [a ++ "r" ++ show x] ++ [a ++ "w" ++ show x]
 
+-- | if a variable name is includeded in the restriction
+--    all channels generated for its management are included too
+expandRest :: Foldable t => Rho -> t String -> [[Char]]
 expandRest rho slist =
   let expandList a
         | isIntVarDef rho a =
@@ -659,8 +761,9 @@ expandRest rho slist =
           let values = getBoolVar rho a
            in generateChannels a values []
         | otherwise = [a]
-   in concat $ map expandList slist
+   in concatMap expandList slist
 
+translateProcAus :: Rho -> Proc -> (Rho, Proc)
 translateProcAus rho p =
   case p of
     Nil -> (rho, Nil)
@@ -668,7 +771,6 @@ translateProcAus rho p =
       if pn `elem` pid rho
         then (rho, p)
         else error $ "Process " ++ pn ++ " not defined"
-    --ActionP a -> (rho, ActionP a)
     CommandP c ->
       let nn = newname $ counter rho
           rho' = translateCom rho {counter = counter rho + 1} (Cst nn) c
@@ -698,26 +800,24 @@ translateProcAus rho p =
        in (rho'', ParallelComp proc1 proc2)
     _ -> error "Invalid semantic, process must end with nil/0 or process variable"
 
-{-translateProc rho name p =
-  case p of
-    -- TODO: management of input and output
-    ActionP a -> rho {prog = prog rho ++ [ProcDef name $ ActionP a]}
-    CommandP c -> translateCom rho name c
-    _ -> rho {prog = prog rho ++ [ProcDef name p]}-}
 translateProc rho name p =
   let (rho', p') = translateProcAus rho p
    in rho' {prog = prog rho' ++ [ProcDef name p']}
 
-translateStmt rho (ProcDef n p) =
-  let rho' = translateProc rho n p
-   in Right rho'
-translateStmt rho (SetDef n l) =
-  let rho' = rho {prog = prog rho ++ [SetDef n l]}
-   in Right rho'
+-- | Valid statement for translateStmt doesn't contain parametric processes or valiable
+translateStmt :: Rho -> Stmt -> Rho
+translateStmt rho (ProcDef n p) = translateProc rho n p
+translateStmt rho (SetDef n l) = rho {prog = prog rho ++ [SetDef n l]}
 translateStmt rho _ =
-  Left "Invalid definition"
+  error "Invalid definition"
 
-translate rho def =
-  case translateStmt rho def of
-    Left e -> error $ show e
-    Right r -> r
+-- | Given the enviroment and a statement returns the enviroment
+--   including the statement that doesn't contain commands and value passing action anymore.
+thirdStep rho def =
+  foldl translateStmt rho def
+
+translate text =
+  let rho = Rho {pid = [], setid = Map.empty, defIid = Map.empty, defBid = Map.empty, prog = [], counter = 0}
+      res1 = firstStep rho text
+      res2 = secondStep res1
+   in thirdStep (res2 {prog = []}) $ prog res2

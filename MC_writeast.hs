@@ -87,12 +87,10 @@ astToCCS procList =
 main = do
   [filename] <- getArgs
   source <- readFile filename
-  let res = parseSource source
+  let text = parseSource source
+  let res = translate text
   let rho = Rho {pid = [], setid = Map.empty, defIid = Map.empty, defBid = Map.empty, prog = [], counter = 0}
-  let res1 = foldl testSeman rho res
-  let res2 = valuePassing res1
-  let res3 = foldl translate (res2 {prog = []}) $ prog res2
-  let p = astToCCS $ prog res3
+  let p = astToCCS $ prog res
   let (dir, filename') = splitFileName filename
   writeFile (dir ++ "CCS" ++ filename') p
-  print res2
+  print res
