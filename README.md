@@ -92,7 +92,6 @@ Their names begin with a capital letter and do not translate into any process in
 ```
 def N<=3;
 def M < 5 8;
-
 ```
 **Variables**\
 Their names begin with a lower case letter. The variables are like value servers, some generated processes are dedicated, and through channels, the values can be read or written. Again, the admissible values are specified in the same way as for parametric process variables.
@@ -187,7 +186,6 @@ IF = PROG3 ;
 **While command**
 ```
 WHILE =  while (! x== 0) do {dec x};
-
 ```
 ```
 PROG7 = xr1 .PROG8  + xr2 .PROG8  + xr3 .PROG8  + xr0 .'done .0 ;
@@ -198,7 +196,6 @@ WHILE = PROG7 ;
 **Inc comman**
 ```
 INC = inc x;
-
 ```
 ```
 PROG11 = 'xInc .'done .0 ;
@@ -208,7 +205,6 @@ INC = PROG11 ;
 **Dec command**
 ```
 DEC = dec x;
-
 ```
 ```
 PROG12 = 'xDec .'done .0 ;
@@ -235,7 +231,6 @@ Output actions could send an integer value or a parameter that takes on a partic
 
 ```
 A = a(x).('b<x>.A + 'c<0>.0);
-
 ```
 ```
 A = x0 .( 'b0 .A  + 'c0 .0  ) + x1 .( 'b1 .A  + 'c0 .0  ) + x2 .( 'b2 .A  + 'c0 .0  );
@@ -291,19 +286,17 @@ It also contains the main that, given an input file, translates its content and 
 
 ****
 ## Requirement to build the code
+To compile the project you need ghc, follow the instructions [here](https://www.haskell.org/platform/).
 
 
 Compile:
 ```
 ghc --make -o macroCAAL -main-is MC_writeast  MC_writeast.hs
-
-
 ```
 Test:
 
 ```
 ./macroCAAL testname 
-
 ```
 In the test folder, there are specific tests for each of the introduced constructs. Examples of usage are given in the files test.txt and test1.txt.
 The petersonHyman.txt file is provided with the implementation of the mutual exclusion protocol; more details about the protocol are in the file PetrsonHyman.txt, created by Professor Roberto Bruni.
