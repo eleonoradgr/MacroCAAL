@@ -1,3 +1,5 @@
+B1 = b1wtrue .B1TRUE ;
+B1TRUE = 'b1rtrue .B1TRUE  + B1 ;
 B2 = b2wtrue .B2TRUE  + b2wfalse .B2FALSE ;
 B2TRUE = 'b2rtrue .B2TRUE  + B2 ;
 B2FALSE = 'b2rfalse .B2FALSE  + B2 ;

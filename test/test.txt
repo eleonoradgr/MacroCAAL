@@ -1,0 +1,28 @@
+** Some general examples
+def N<=3;
+def c <= 3;
+A{N+1} = a.A{N} + b.0;
+A{0} = b.0;
+C1 = a.A + b.B;
+P = C[c/a,d/c];
+def b2=[true,false];
+def k=[1,2];
+def x = [3, 7, 9];
+A = while (b2 && k==2) do {k := 1, skip};
+A11 = a(x).('b<x>.A1 + 'c<0>.0);
+B1 = a(x).('b<x>.B1 + a(k).0 + 'c<0>.0 );
+B = x := 3;
+C10 = if (x == 3) then {skip} else {skip} ;
+set L = { val, x, y};
+C12 = C \ L ;
+A111 = (A \ {a,b}) \{c};
+P1 = P[c/a,d/c];
+MT1 = 'exit1.MT1 + 'enter2.'bad.0 \L  ;
+X1 = ab.(while (b2 && k==2) do {k := 1, skip} );
+X2 = a.0 | b.B;
+Proc = while true 
+        do { b2:= true , 
+             k := 2, 
+             while (b2 && k == 2) 
+             do {skip}, 
+             b2 := false};

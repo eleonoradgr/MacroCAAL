@@ -1,0 +1,25 @@
+** Some general examples
+
+def b2 = [5, 7, 10];
+def x2 <= 3;
+def x3 < 3;
+def x4 <= 6 8; 
+def var = [true, false];
+def x = [true, false];
+
+Proc = b2 := 5, 
+       x2:=3, 
+       if (b2 == 5 && (var && ( !x || x2 == 1))) 
+       then{ x:= false , inc x2 } 
+       else {b2:=7 }, 
+       b2:= 10;
+
+Proc1 = while (x && x2==2) do {skip};
+
+A = b2:= 5 | x2:=3 | b2:= 10; 
+
+def N<=3;
+A{N+1} = a.A{N} + b.0;
+A{0} = b.0;
+
+Complex = A + A2 | Proc;

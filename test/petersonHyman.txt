@@ -1,0 +1,40 @@
+** Read from PetersonHyman.txt file the he details of the problem.
+
+def b1 = [true, false];
+def b2 = [true, false];
+def k = [1,2];
+def enter1 = [1];
+def exit1 = [1];
+def enter2 = [1];
+def exit2 = [1];
+
+P1 = b1 := false,
+     while true do
+     {
+         b1 := true,
+         k := 2,
+         while (b2 && k==2) do { skip },
+         enter1 := 1,
+         exit1 := 1,
+         b1 := false
+     };
+
+
+P2 = b2 := false,
+     while true do
+     {
+         b2 := true,
+         k := 1,
+         while (b1 && k==1) do { skip },
+         enter2 := 1,
+         exit2 := 1,
+         b1 := false
+     };
+
+Proc = (P1 | P2 | B1 | B2 | K | ENTER1 | ENTER2) \{b1, b2, k};
+
+* Verify: Mutual exclusion property
+* MEX = ['exit1w1]ff or ['exit2w1]ff ;
+* MEX and [-](MEX and [-](MEX and [-]( ... )) )
+* X max= (['exit1w1]ff or ['exit2w1]ff) and [-]X ;
+* SP |= X

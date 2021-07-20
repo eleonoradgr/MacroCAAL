@@ -1,5 +1,6 @@
 def N<=3;
 def M < 5 8;
+def b1 = [true, true, true];
 def b2=[true,false];
 def k=[1,2];
 def i <= 5;

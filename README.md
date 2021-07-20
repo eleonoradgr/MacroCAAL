@@ -293,18 +293,21 @@ It also contains the main that, given an input file, translates its content and 
 ## Requirement to build the code
 
 
-compile:
+Compile:
 ```
 ghc --make -o macroCAAL -main-is MC_writeast  MC_writeast.hs
 
 
 ```
-test:
+Test:
 
 ```
-./macroCAAL /test/test.txt 
+./macroCAAL testname 
 
 ```
+In the test folder, there are specific tests for each of the introduced constructs. Examples of usage are given in the files test.txt and test1.txt.
+The petersonHyman.txt file is provided with the implementation of the mutual exclusion protocol; more details about the protocol are in the file PetrsonHyman.txt, created by Professor Roberto Bruni.
+
 
 ****
 ### Future developments
