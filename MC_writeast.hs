@@ -10,6 +10,7 @@ import MC_Semant
 import System.Environment
 import System.FilePath
 
+procToStingAus :: Proc -> [a] -> Bool -> [Char]
 procToStingAus p s paren =
   case p of
     Nil ->
@@ -67,9 +68,11 @@ procToStingAus p s paren =
        in if paren then "( " ++ sres ++ " )" else sres
     _ -> error "Invalid directive"
 
+procToString :: Proc -> [Char]
 procToString p =
   procToStingAus p [] False
 
+procDefToString :: Stmt -> [Char]
 procDefToString (ProcDef (Cst name) p) =
   let nameString = name ++ " = "
       procString = procToString p
@@ -80,6 +83,7 @@ procDefToString (SetDef name elem) =
    in nameString ++ procString ++ ";"
 procDefToString _ = "Invalid CAAL syntax"
 
+astToCCS :: [Stmt] -> [Char]
 astToCCS procList =
   let s = map procDefToString procList
    in List.intercalate "\n" s
@@ -89,7 +93,6 @@ main = do
   source <- readFile filename
   let text = parseSource source
   let res = translate text
-  let rho = Rho {pid = [], setid = Map.empty, defIid = Map.empty, defBid = Map.empty, prog = [], counter = 0}
   let p = astToCCS $ prog res
   let (dir, filename') = splitFileName filename
   writeFile (dir ++ "CCS" ++ filename') p
