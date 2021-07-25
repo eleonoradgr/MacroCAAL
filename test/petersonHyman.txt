@@ -28,11 +28,11 @@ P2 = b2 := false,
          while (b1 && k==1) do { skip },
          enter2 := 1,
          exit2 := 1,
-         b1 := false
+         b2 := false
      };
 
-Proc = (P1 | P2 | B1 | B2 | K | ENTER1 | ENTER2) \{b1, b2, k};
-
+Proc = (P1 | P2 | B1 | B2 | K ) \{b1, b2, k};
+ 
 * Verify: Mutual exclusion property
 * MEX = ['exit1w1]ff or ['exit2w1]ff ;
 * MEX and [-](MEX and [-](MEX and [-]( ... )) )

@@ -558,7 +558,7 @@ assBexpreval :: Rho -> [Char] -> BExpr -> [Char]
 assBexpreval rho v be =
   let be' = evalCstBExpr be
       beRange = getBoolVar rho v
-      action = v ++ "w" ++ show be'
+      action = v ++ "w" ++ map toLower (show be')
    in if be' `elem` beRange
         then action
         else error $ "invalid value for " ++ v
@@ -707,7 +707,7 @@ concateval rho nameProc c procListname lastCommand =
     VarBAssign v be ->
       let be' = evalCstBExpr be
           beRange = getBoolVar rho v
-          action = v ++ "w" ++ show be'
+          action = v ++ "w" ++ map toLower (show be')
        in if be' `elem` beRange
             then (rho {prog = prog rho ++ [ProcDef (Cst nameProc) $ PrefixP (cact action) lastCommand]}, procListname ++ [nameProc])
             else error $ "invalid value for " ++ v
@@ -759,7 +759,7 @@ expandRest rho slist =
            in generateChannels a values []
         | isBoolVarDef rho a =
           let values = getBoolVar rho a
-           in generateChannels a values []
+           in map (map toLower) $generateChannels a values []
         | otherwise = [a]
    in concatMap expandList slist
 
